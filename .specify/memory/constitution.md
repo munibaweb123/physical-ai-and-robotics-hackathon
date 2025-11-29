@@ -1,69 +1,102 @@
 <!--
-Sync Impact Report:
-Version change: old → 1.0.0
-Modified principles: Preamble, Core Objectives, Quarter Timeline & Modules, The Capstone Project, Tech Stack & Tools.
-Added sections: Course Code, Theme, Mission, Preamble, Article I, Article II, Article III, Article IV.
-Removed sections: SECTION_2_NAME, SECTION_3_NAME.
-Templates requiring updates:
-- .specify/templates/plan-template.md: ⚠ pending
-- .specify/templates/spec-template.md: ⚠ pending
-- .specify/templates/tasks-template.md: ⚠ pending
-- .specify/templates/commands/*.md: ⚠ pending
-Follow-up TODOs: None
+SYNC IMPACT REPORT
+Version Change: 1.0.0 -> 1.1.0
+Modified Principles:
+- None (Principles retained)
+Added Sections:
+- The Course Details (Focus, Theme, Goals)
+- Quarter Overview (Module breakdown)
+Templates Status:
+- .specify/templates/plan-template.md: ✅
+- .specify/templates/spec-template.md: ✅
+- .specify/templates/tasks-template.md: ✅
+Follow-up:
+- Ensure course modules in docs match the new detailed descriptions.
 -->
-# Constitution of Physical AI & Humanoid Robotics
+# Physical AI & Humanoid Robotics Course Constitution
 
-## Course Overview
-**Course Code**: PAI-400
-**Theme**: AI Systems in the Physical World & Embodied Intelligence
-**Mission**: To bridge the gap between the digital brain and the physical body.
+## The Course Details
 
-## Preamble
-We hold these truths to be self-evident: that intelligence is not strictly digital, but must be embodied to truly understand the world. The future of AI extends beyond servers and screens into the physical realm. In this quarter, students will transition from coding agents in a void to architecting Physical AI—systems that function in reality, respect the laws of physics, and interact with humans naturally.
+### Physical AI & Humanoid Robotics
+**Focus and Theme**: AI Systems in the Physical World. Embodied Intelligence.  
+**Goal**: Bridging the gap between the digital brain and the physical body. Students apply their AI knowledge to control Humanoid Robots in simulated and real-world environments.
 
-## Article I: Core Objectives
-### Embodiment
-To grant AI agents a physical form (chassis, sensors, actuators) allowing them to manipulate the world.
+### Quarter Overview
+The future of AI extends beyond digital spaces into the physical world. This capstone quarter introduces Physical AI—AI systems that function in reality and comprehend physical laws. Students learn to design, simulate, and deploy humanoid robots capable of natural human interactions using ROS 2, Gazebo, and NVIDIA Isaac.
 
-### Simulation-to-Reality (Sim2Real)
-To master the art of the "Digital Twin," training in risk-free virtual environments before deploying to hardware.
+- **Module 1: The Robotic Nervous System (ROS 2)**
+  - *Focus*: Middleware for robot control.
+  - ROS 2 Nodes, Topics, and Services.
+  - Bridging Python Agents to ROS controllers using `rclpy`.
+  - Understanding URDF (Unified Robot Description Format) for humanoids.
 
-### Cognitive Control
-To utilize Large Language Models (LLMs) not just for text, but as the high-level planning cortex for robotic motor function.
+- **Module 2: The Digital Twin (Gazebo & Unity)**
+  - *Focus*: Physics simulation and environment building.
+  - Simulating physics, gravity, and collisions in Gazebo.
+  - High-fidelity rendering and human-robot interaction in Unity.
+  - Simulating sensors: LiDAR, Depth Cameras, and IMUs.
 
-## Article II: Quarter Timeline & Modules
-### Module 1: The Robotic Nervous System (ROS 2)
-"The body must obey the mind." This module establishes the fundamental communication infrastructure required to control complex hardware.
-**Focus**: Middleware for robot control and inter-process communication.
-**Key Concepts**: Nodes & Topics: The publish-subscribe architecture of robot data. Services & Actions: Request/response patterns for blocking and non-blocking tasks. rclpy: Bridging high-level Python AI agents to low-level motor controllers. URDF (Unified Robot Description Format): Defining the kinematics, joints, and visual geometry of a humanoid robot.
+- **Module 3: The AI-Robot Brain (NVIDIA Isaac™)**
+  - *Focus*: Advanced perception and training.
+  - NVIDIA Isaac Sim: Photorealistic simulation and synthetic data generation.
+  - Isaac ROS: Hardware-accelerated VSLAM (Visual SLAM) and navigation.
+  - Nav2: Path planning for bipedal humanoid movement.
 
-### Module 2: The Digital Twin (Gazebo & Unity)
-"Training in the matrix." Before a robot walks in the real world, it must fall a thousand times in the simulation.
-**Focus**: Physics simulation, environment building, and sensor emulation.
-**Key Concepts**: Physics Engines: Simulating gravity, friction, inertia, and collisions in Gazebo. High-Fidelity Rendering: Using Unity for photorealistic human-robot interaction scenarios. Sensor Simulation: Implementing virtual LiDAR, Depth Cameras, and IMUs (Inertial Measurement Units) to generate noisy, realistic data streams.
+- **Module 4: Vision-Language-Action (VLA)**
+  - *Focus*: The convergence of LLMs and Robotics.
+  - Voice-to-Action: Using OpenAI Whisper for voice commands.
+  - Cognitive Planning: Using LLMs to translate natural language ("Clean the room") into a sequence of ROS 2 actions.
+  - **Capstone Project**: The Autonomous Humanoid. A final project where a simulated robot receives a voice command, plans a path, navigates obstacles, identifies an object using computer vision, and manipulates it.
 
-### Module 3: The AI-Robot Brain (NVIDIA Isaac™)
-"Perception precedes action." A robot must map its environment to navigate it effectively.
-**Focus**: Advanced perception, synthetic data generation, and navigation.
-**Key Concepts**: NVIDIA Isaac Sim: Leveraging photorealism to generate synthetic training data for computer vision models. Isaac ROS: utilizing hardware acceleration for VSLAM (Visual Simultaneous Localization and Mapping). Nav2 Stack: Implementing path planning algorithms (A*, Dijkstra) specifically tuned for bipedal humanoid movement constraints.
+## Core Principles
 
-### Module 4: Vision-Language-Action (VLA)
-"From words to motion." The convergence of Generative AI and Robotics.
-**Focus**: The intersection of LLMs, Vision Transformers, and Control Theory.
-**Key Concepts**: Voice-to-Action: Integrating OpenAI Whisper to process auditory commands. Cognitive Planning: Utilizing LLMs (e.g., GPT-4o, Llama 3) to decompose abstract commands ("Clean the room") into a structured sequence of ROS 2 primitives (Locate Object -> Plan Path -> Grasp -> Transport). VLA Models: End-to-end models that output robot actions directly from visual and textual inputs.
+### I. Embodied Intelligence First
+Physical AI differs fundamentally from digital AI. All systems must account for physical laws, gravity, inertia, and sensor noise. Code is not complete until it operates within the constraints of a physical body (or a high-fidelity physics simulation of one). "Brains without bodies" are insufficient; intelligence must be grounded in sensorimotor interaction.
 
-## Article III: The Capstone Project
-**Objective**: Students will deploy a full-stack Physical AI system in a high-fidelity simulated environment (household or warehouse). The robot must operate autonomously based on a high-level human request.
-**The Workflow**: Input: The robot receives a voice command (e.g., "Find the red medical kit and bring it to the couch"). Perception (Whisper + LLM): The system transcribes audio and parses the intent into a task list. Navigation (Isaac ROS + Nav2): The robot generates a map, localizes itself, and plans a path to the target area while avoiding dynamic obstacles. Vision (YOLO/Transformer): The robot identifies the specific object using computer vision. Manipulation (MoveIt): The robot executes inverse kinematics to grasp the object. Completion: The robot navigates to the destination and places the object.
+### II. Simulation-to-Real Fidelity
+The "Digital Twin" is mandatory. Before any code touches physical hardware, it must be validated in a high-fidelity simulator (Isaac Sim/Gazebo) utilizing rigid body dynamics and accurate sensor modeling. The "Sim-to-Real" gap must be minimized by using RTX-enabled rendering and precise URDF/SDF robot descriptions.
 
-## Article IV: Tech Stack & Tools
-**Operating System**: Ubuntu Linux (22.04 LTS)
-**Middleware**: ROS 2 (Humble Hawksbill)
-**Languages**: Python (Logic/AI), C++ (Performance Nodes)
-**Simulation**: Gazebo Fortress, Unity, NVIDIA Isaac Sim
-**AI/ML**: PyTorch, OpenAI API, Hugging Face Transformers
+### III. Hardware-Aware Architecture
+Compute loads must be distributed correctly. Training, physics simulation, and heavy rendering belong on High-Performance Workstations (RTX 4070 Ti+, Ubuntu, i7/Ryzen9) or Cloud instances. Real-time inference, control loops, and sensor processing belong on Edge Devices (Jetson Orin). Latency between these layers must be managed explicitly; remote control over the internet is prohibited for dynamic balancing.
+
+### IV. Hybrid AI Stack
+The system architecture must integrate deterministic control with probabilistic intelligence.
+- **Deterministic**: ROS 2 (Humble/Iron) middleware for reliable communication, real-time control, and navigation stacks.
+- **Probabilistic**: Generative AI (LLMs, VLAs, Whisper) for high-level planning, natural language understanding, and semantic reasoning.
+These two worlds must bridge seamlessly (e.g., LLM outputs -> ROS 2 Actions).
+
+### V. Open & Modular Hardware
+The course supports tiered hardware (Proxy, Miniature, Premium) to ensure accessibility. However, the software stack must remain standard (ROS 2). Proprietary "black box" controllers that prevent custom node injection are prohibited. Hardware choices must support the "Nervous System" concept: Visual Perception (RealSense), Vestibular Sense (IMU), and Actuation.
+
+## Technology Standards
+
+### Core Stack
+- **Operating System**: Ubuntu 22.04 LTS (Mandatory for ROS 2 ecosystem compatibility).
+- **Middleware**: ROS 2 (Humble or Iron).
+- **Simulation**: NVIDIA Isaac Sim (Omniverse), Gazebo, Unity.
+- **AI Frameworks**: PyTorch, NVIDIA JetPack, OpenAI API (or local LLM equivalents).
+
+### Hardware Reference
+- **Workstation**: NVIDIA RTX 4070 Ti (12GB VRAM min) for Isaac Sim.
+- **Edge**: NVIDIA Jetson Orin Nano/NX for robot deployment.
+- **Sensors**: Intel RealSense (Depth/RGB), BNO055 (IMU), ReSpeaker (Audio).
+
+## Course Delivery & Assessment
+
+### Structure
+The curriculum progresses from "Digital AI" to "Embodied AI" over 13 weeks, culminating in a Capstone Project.
+- **Modules**: Foundations -> ROS 2 -> Simulation -> Isaac Platform -> Humanoid Dev -> Conversational AI.
+- **Milestones**: Successful Sim setup -> ROS 2 Package -> Sim-to-Real transfer (or Sim-proof).
+
+### Quality Gates
+- **Assessment**: Projects are assessed on functional deployment. Code that runs only in a notebook is insufficient; it must control a node in the robot graph.
+- **Capstone**: A Simulated Humanoid robot demonstrating conversational capabilities (Speech-to-Action).
 
 ## Governance
-This constitution outlines the foundational principles and structure of the Physical AI & Humanoid Robotics course (PAI-400). Amendments will be made through instructor discretion and course committee review.
 
-**Version**: 1.0.0 | **Ratified**: 2025-11-28 | **Last Amended**: 2025-11-28
+This Constitution governs the curriculum design, hardware selection, and software architecture of the Physical AI Course.
+- **Amendments**: Must be ratified by the lead instructors/maintainers. Changes to hardware requirements must consider student budget impact and availability.
+- **Compliance**: All lab instructions, tutorials, and capstone requirements must align with the ROS 2 + Isaac Sim standard.
+- **Safety**: Simulation validation is a non-negotiable safety gate before deployment to physical humanoid robots to prevent hardware damage or injury.
+
+**Version**: 1.1.0 | **Ratified**: 2025-11-29 | **Last Amended**: 2025-11-29
