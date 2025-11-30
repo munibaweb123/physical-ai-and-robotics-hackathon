@@ -1,40 +1,55 @@
+import os
 import json
 import urllib.request
 import urllib.error
+import re
 
-def ingest_data():
-    file_path = "physical-ai-docs/docs/01-foundations/01-era-of-physical-ai.md"
+def get_chapter_title(content):
+    """Extracts the first H1 heading as the title."""
+    match = re.search(r'^#\s+(.+)$', content, re.MULTILINE)
+    if match:
+        return match.group(1).strip()
+    return "Unknown Chapter"
+
+def ingest_all_chapters():
+    docs_dir = "physical-ai-docs/docs"
     url = "http://localhost:8000/ingest"
+    
+    print(f"Scanning directory: {docs_dir}")
 
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            content = f.read()
+    # Walk through all files in the docs directory
+    for root, _, files in os.walk(docs_dir):
+        for file in files:
+            if file.endswith(".md"):
+                file_path = os.path.join(root, file)
+                print(f"Processing: {file_path}")
 
-        data = {
-            "raw_text": content,
-            "chapter_title": "The Era of Physical AI",
-            "page_numbers": "1-5"
-        }
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        content = f.read()
 
-        json_data = json.dumps(data).encode("utf-8")
-        
-        req = urllib.request.Request(
-            url, 
-            data=json_data, 
-            headers={'Content-Type': 'application/json'}
-        )
+                    title = get_chapter_title(content)
+                    
+                    # Prepare data payload
+                    data = {
+                        "raw_text": content,
+                        "chapter_title": title,
+                        "page_numbers": file  # Using filename as reference
+                    }
 
-        with urllib.request.urlopen(req) as response:
-            print(f"Success! Response: {response.read().decode('utf-8')}")
+                    json_data = json.dumps(data).encode("utf-8")
+                    
+                    req = urllib.request.Request(
+                        url, 
+                        data=json_data, 
+                        headers={'Content-Type': 'application/json'}
+                    )
 
-    except FileNotFoundError:
-        print(f"Error: Could not find file at {file_path}")
-    except urllib.error.URLError as e:
-        print(f"Error sending request: {e}")
-        if hasattr(e, 'read'):
-             print(f"Details: {e.read().decode('utf-8')}")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+                    with urllib.request.urlopen(req) as response:
+                        print(f"  -> Success! Ingested '{title}'")
+
+                except Exception as e:
+                    print(f"  -> Failed to ingest {file}: {e}")
 
 if __name__ == "__main__":
-    ingest_data()
+    ingest_all_chapters()

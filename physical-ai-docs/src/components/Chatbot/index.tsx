@@ -38,7 +38,7 @@ export default function Chatbot() {
 
     try {
       // Call the FastAPI backend
-      const response = await fetch('http://localhost:8000/chat', {
+      const response = await fetch('https://caridad-nosogeographic-faye.ngrok-free.dev/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
