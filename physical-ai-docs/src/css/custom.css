@@ -1,0 +1,72 @@
+/**
+ * Any CSS included here will be global. The classic template
+ * bundles Infima by default. Infima is a CSS framework designed to
+ * work well for content-centric websites.
+ */
+
+/* You can override the default Infima variables here. */
+:root {
+  --ifm-color-primary: #4B0082; /* Dark Indigo */
+  --ifm-color-primary-dark: #3A0066;
+  --ifm-color-primary-darker: #310055;
+  --ifm-color-primary-darkest: #23003F;
+  --ifm-color-primary-light: #5A009C;
+  --ifm-color-primary-lighter: #6A00B8;
+  --ifm-color-primary-lightest: #7B00D4;
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+}
+
+/* For readability concerns, you should choose a lighter palette in dark mode. */
+[data-theme='dark'] {
+  --ifm-color-primary: #9400D3; /* Dark Violet */
+  --ifm-color-primary-dark: #8000B8;
+  --ifm-color-primary-darker: #7300A8;
+  --ifm-color-primary-darkest: #5C008A;
+  --ifm-color-primary-light: #A800EB;
+  --ifm-color-primary-lighter: #BB00FF;
+  --ifm-color-primary-lightest: #CC33FF;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+}
+
+.hero--primary {
+  background-image: linear-gradient(135deg, var(--ifm-color-primary-darkest) 0%, var(--ifm-color-primary) 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.hero--primary::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnPjxwYXRoIGZpbGw9IiNGMEYwRjAiIGQ9Ik0zNiAzN2gyNHYyNEgzNnpNMzYgMDAwMDsyNC0yNHYyNEgzNnoiLz48cGF0aCBmaWxsPSIjRDBEMEQwIiBkPSJNMjQgMzZoMjR2MjRIMjR6TTI0IDBoMjR2MjRIMjR6TTM2IDI0aDI0djI0SDM2eiIvPjxwYXRoIGZpbGw9IiNDMEMwQzAiIGQ9Ik0wIDM2aDI0djI0SDB6TTAgMGgyNHYyNEgweloiLz48cGF0aCBmaWxsPSIjRjVFNUU1IiBkPSJNMjQgMjRoMjR2MjRIMjR6TTI0IDI0aDI0djI0SDI0eiIvPjwvZz48L2c+PC9zdmc+') repeat;
+  opacity: 0.1;
+  z-index: 0;
+}
+
+.hero__title,
+.hero__subtitle {
+  position: relative;
+  z-index: 1;
+}
+
+.button--secondary {
+  --ifm-button-color: var(--ifm-color-primary-lightest);
+  --ifm-button-background-color: var(--ifm-color-primary);
+  --ifm-button-hover-background-color: var(--ifm-color-primary-dark);
+  --ifm-button-active-background-color: var(--ifm-color-primary-darker);
+  --ifm-button-border-color: var(--ifm-color-primary-lightest);
+  --ifm-button-shadow: 0 0 10px var(--ifm-color-primary-lightest);
+  font-weight: bold;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  transition: all 0.3s ease-in-out;
+}
+
+.button--secondary:hover {
+  --ifm-button-shadow: 0 0 20px var(--ifm-color-primary-lightest), 0 0 30px var(--ifm-color-primary-light);
+  transform: translateY(-2px);
+}

@@ -1,0 +1,26 @@
+# Python-specific ignores
+__pycache__/
+*.pyc
+.venv/
+venv/
+dist/
+*.egg-info/
+.env
+.env.*
+
+# Universal ignores
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/
+*.log
+
+# Node/JS specific
+node_modules/
+.docusaurus/
+build/
+.cache/
+npm-debug.log
+yarn-error.log
