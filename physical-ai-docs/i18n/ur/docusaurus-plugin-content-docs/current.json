@@ -1,0 +1,26 @@
+{
+  "version.label": {
+    "message": "Next",
+    "description": "The label for version current"
+  },
+  "sidebar.tutorialSidebar.category.foundations": {
+    "message": "foundations",
+    "description": "The label for category 'foundations' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.ros2-system": {
+    "message": "ros2-system",
+    "description": "The label for category 'ros2-system' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.brain-control": {
+    "message": "brain-control",
+    "description": "The label for category 'brain-control' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.cognitive-ai": {
+    "message": "cognitive-ai",
+    "description": "The label for category 'cognitive-ai' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.appendices": {
+    "message": "appendices",
+    "description": "The label for category 'appendices' in sidebar 'tutorialSidebar'"
+  }
+}

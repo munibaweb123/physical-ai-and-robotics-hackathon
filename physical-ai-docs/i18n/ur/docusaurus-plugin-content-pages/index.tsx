@@ -6,8 +6,8 @@ import Layout from '@theme/Layout';
 import Heading from '@theme/Heading';
 import useBaseUrl from '@docusaurus/useBaseUrl';
 
-import styles from './index.module.css';
-import HomepageFeatures from '@site/src/components/HomepageFeatures';
+import styles from '@site/src/pages/index.module.css'; // Adjust path for i18n structure
+import HomepageFeatures from '@site/src/components/HomepageFeatures'; // Adjust path for i18n structure
 
 function HomepageHeader() {
   const {siteConfig} = useDocusaurusContext();
@@ -23,12 +23,10 @@ function HomepageHeader() {
         </p>
         <div className={styles.buttons}>
           <Link
-            className="button button--primary button--lg"
-            to="/docs/foundations/era-of-physical-ai"
-            target="_self">
+            className="button button--secondary button--lg"
+            to="/docs/foundations/era-of-physical-ai">
             Start Learning
           </Link>
-           
         </div>
       </div>
     </header>

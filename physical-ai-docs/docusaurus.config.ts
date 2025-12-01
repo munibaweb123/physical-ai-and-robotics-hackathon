@@ -18,6 +18,7 @@ const config: Config = {
   url: 'https://munibaweb123.github.io',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
+  
   baseUrl: '/',
 
   // GitHub pages deployment config.
@@ -32,7 +33,21 @@ const config: Config = {
   // may want to replace "en" with "zh-Hans".
   i18n: {
     defaultLocale: 'en',
-    locales: ['en'],
+    locales: ['en', 'ur', 'fr'],
+    localeConfigs: {
+      en: {
+        label: 'English',
+        direction: 'ltr',
+      },
+      ur: {
+        label: 'اردو',
+        direction: 'rtl',
+      },
+      fr: {
+        label: 'Français',
+        direction: 'ltr',
+      },
+    },
   },
 
   presets: [
@@ -91,6 +106,10 @@ const config: Config = {
           to: '/chatbot',
           label: 'AI Assistant',
           position: 'left',
+        },
+        {
+          type: 'localeDropdown',
+          position: 'right',
         },
         {
           href: 'https://github.com/facebook/docusaurus',
