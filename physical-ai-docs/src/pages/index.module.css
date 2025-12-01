@@ -20,4 +20,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative; /* Needed for z-index to work */
+  z-index: 2;
 }

@@ -24,8 +24,7 @@ function HomepageHeader() {
         <div className={styles.buttons}>
           <Link
             className="button button--primary button--lg"
-            to="/docs/foundations/era-of-physical-ai"
-            target="_self">
+            to={useBaseUrl("/docs/foundations/era-of-physical-ai")}>
             Start Learning
           </Link>
            
@@ -52,7 +51,7 @@ function HomepageMainContent() {
             </p>
             <Link
               className="button button--primary button--lg"
-              to="/docs/foundations/era-of-physical-ai">
+              to={useBaseUrl("/docs/foundations/era-of-physical-ai")}>
               Explore Chapters
             </Link>
           </div>
