@@ -70,7 +70,7 @@ async def authenticate_user(authorization: str = Header(...)):
         # Call the Node.js auth server to verify the session
         response = await http_client.post(
             f"{settings.AUTH_SERVER_URL}/api/auth/verify-session",
-            headers={"Cookie": f"auth_session={session_id}"} # Pass session ID as a cookie
+            json={"token": session_id} # Pass session ID (token) in body
         )
         response.raise_for_status() # Raise for HTTP errors (4xx or 5xx)
         

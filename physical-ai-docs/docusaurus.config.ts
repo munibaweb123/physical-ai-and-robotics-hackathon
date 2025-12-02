@@ -50,28 +50,7 @@ const config: Config = {
     },
   },
 
-  plugins: [
-    function (context, options) {
-      return {
-        name: 'docusaurus-plugin-proxy',
-        configureWebpack(config, isServer) {
-          if (isServer) return {};
-          return {
-            devServer: {
-              proxy: [
-                {
-                  context: ['/api'],
-                  target: 'http://localhost:4000',
-                  secure: false,
-                  changeOrigin: true,
-                },
-              ],
-            },
-          };
-        },
-      };
-    },
-  ],
+  plugins: [],
 
   presets: [
     [

@@ -2,18 +2,21 @@ import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { auth } from './auth';
+import { db } from './db'; // Import db
 import { cors } from 'hono/cors';
 
 const app = new Hono();
 
 // CORS for frontend
 app.use(
-    '*',
+    '/api/*',
     cors({
-        origin: ['http://localhost:3000'], // Allow Docusaurus frontend
-        credentials: true, // Allow cookies for session management
-        allowHeaders: ['Content-Type', 'Authorization'],
+        origin: (origin) => origin, // Allow any origin (reflect request origin)
+        credentials: true,
+        allowHeaders: ['Content-Type', 'Authorization', 'Cookie'],
         allowMethods: ['POST', 'GET', 'OPTIONS', 'PUT', 'DELETE'],
+        exposeHeaders: ['Content-Length', 'X-Kuma-Revision'],
+        maxAge: 600,
     })
 );
 
@@ -23,9 +26,57 @@ app.use('/static/*', serveStatic({ root: './' }));
 // Health check endpoint
 app.get('/api/auth/health', (c) => c.json({ status: 'ok' }));
 
+// For Python backend verification, we will create a simple endpoint
+// that verifies the session and returns user info.
+app.post('/api/auth/verify-session', async (c) => {
+    try {
+        const body = await c.req.json();
+        const token = body.token;
+
+        if (!token) {
+            return c.json({ success: false, message: 'No token provided' }, 400);
+        }
+
+        // Query DB directly for session
+        // better-auth usually stores the token as-is or hashed. 
+        // If hashed, this direct lookup might fail, but let's try.
+        const session = await db.selectFrom('session')
+            .selectAll()
+            .where('token', '=', token)
+            .executeTakeFirst();
+
+        if (!session) {
+             // If not found, maybe it's because it's hashed? 
+             // But standard better-auth often stores session token directly for lookup performance.
+             return c.json({ success: false, message: 'Session not found' }, 401);
+        }
+        
+        if (new Date(session.expiresAt) < new Date()) {
+             return c.json({ success: false, message: 'Session expired' }, 401);
+        }
+
+        // Get user
+        const user = await db.selectFrom('user')
+            .selectAll()
+            .where('id', '=', session.userId)
+            .executeTakeFirst();
+
+        if (!user) {
+            return c.json({ success: false, message: 'User not found' }, 401);
+        }
+
+        return c.json({ success: true, user: { id: user.id, email: user.email } });
+    } catch (error) {
+        console.error('Session verification error:', error);
+        return c.json({ success: false, message: 'Internal server error during session verification' }, 500);
+    }
+});
+
 // Better Auth routes
-app.on(['POST', 'GET'], '/api/auth/**', (c) => {
-    return auth.handler(c.req.raw);
+app.all('/api/auth/*', async (c) => {
+    console.log('-> Better Auth Request:', c.req.method, c.req.path);
+    const response = await auth.handler(c.req.raw);
+    return response;
 });
 
 // Custom user endpoints (e.g., get current user)
@@ -39,33 +90,6 @@ app.get('/api/auth/user', async (c) => {
     }
 
     return c.json({ user: session.user });
-});
-
-// For Python backend verification, we will create a simple endpoint
-// that verifies the session and returns user info.
-app.post('/api/auth/verify-session', async (c) => {
-    try {
-        const sessionCookie = c.req.header('Cookie');
-        if (!sessionCookie) {
-            return c.json({ success: false, message: 'No session cookie provided' }, 401);
-        }
-
-        const sessionId = auth.readSessionCookie(sessionCookie);
-        if (!sessionId) {
-            return c.json({ success: false, message: 'Invalid session cookie' }, 401);
-        }
-
-        const { session, user } = await auth.getSession(sessionId);
-
-        if (!session || !user) {
-            return c.json({ success: false, message: 'Session or user not found' }, 401);
-        }
-
-        return c.json({ success: true, user: { id: user.id, email: user.email } });
-    } catch (error) {
-        console.error('Session verification error:', error);
-        return c.json({ success: false, message: 'Internal server error during session verification' }, 500);
-    }
 });
 
 const port = 4000;

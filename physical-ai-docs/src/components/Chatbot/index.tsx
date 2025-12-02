@@ -53,7 +53,10 @@ export default function Chatbot() {
     };
 
     // Add Authorization header with the session token
-    if (session && session.id) {
+    if (session && session.token) {
+        headers['Authorization'] = `Bearer ${session.token}`;
+    } else if (session && session.id) {
+         // Fallback if token is missing in type but present in runtime or vice versa
         headers['Authorization'] = `Bearer ${session.id}`;
     }
 

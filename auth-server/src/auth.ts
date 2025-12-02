@@ -2,6 +2,7 @@ import { betterAuth } from 'better-auth';
 import { db } from './db';
 // Workaround for missing export in better-auth v1.4.4
 import { kyselyAdapter } from "../node_modules/better-auth/dist/adapters/kysely-adapter/index.mjs";
+import { bearer } from "better-auth/plugins";
 import { config } from 'dotenv';
 
 config(); // Load environment variables
@@ -10,9 +11,20 @@ const SESSION_COOKIE_NAME = 'auth_session';
 const SESSION_COOKIE_SECRET = process.env.SESSION_COOKIE_SECRET || 'super-secret-key-please-change-me-in-production'; // Change this in production!
 
 export const auth = betterAuth({
+    // baseURL: "http://localhost:4000/api/auth", // Critical: Tell better-auth where it lives
+    emailAndPassword: {
+        enabled: true,
+    },
     database: kyselyAdapter(db, {
         provider: "sqlite",
     }),
+    plugins: [
+        bearer()
+    ],
+    trustedOrigins: ['http://localhost:3000'], // Trust the frontend origin
+    security: {
+        allowedOrigins: ['http://localhost:3000'],
+    },
     secret: SESSION_COOKIE_SECRET,
     // Configure how sessions are managed
     session: {
