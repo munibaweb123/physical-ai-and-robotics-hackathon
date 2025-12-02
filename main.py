@@ -4,7 +4,7 @@ import logging
 import uuid # Added import for UUID generation
 from typing import List, Optional, Dict, Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -13,6 +13,7 @@ from openai import AsyncOpenAI
 from qdrant_client import AsyncQdrantClient, models
 
 from datetime import datetime
+import httpx # Import httpx
 
 # Load environment variables from .env file
 load_dotenv()
@@ -26,6 +27,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = Field(..., description="OpenAI API Key")
     QDRANT_URL: str = Field(..., description="Qdrant Cloud URL")
     QDRANT_API_KEY: str = Field(..., description="Qdrant API Key")
+    AUTH_SERVER_URL: str = Field("http://localhost:4000", description="URL of the Node.js auth server")
 
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -51,11 +53,42 @@ app.add_middleware(
 # --- Global Clients and Connection Pools ---
 openai_client: Optional[AsyncOpenAI] = None
 qdrant_client: Optional[AsyncQdrantClient] = None
-
+http_client: Optional[httpx.AsyncClient] = None # Add httpx client
 
 QDRANT_COLLECTION_NAME = "book_chunks"
 EMBEDDING_MODEL = "text-embedding-3-small"
 OPENAI_CHAT_MODEL = "gpt-4o" # or "gpt-3.5-turbo"
+
+# --- Authentication Dependency ---
+async def authenticate_user(authorization: str = Header(...)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated: Missing or invalid Authorization header")
+    
+    session_id = authorization.split(" ")[1] # Extract session ID from Bearer token
+
+    try:
+        # Call the Node.js auth server to verify the session
+        response = await http_client.post(
+            f"{settings.AUTH_SERVER_URL}/api/auth/verify-session",
+            headers={"Cookie": f"auth_session={session_id}"} # Pass session ID as a cookie
+        )
+        response.raise_for_status() # Raise for HTTP errors (4xx or 5xx)
+        
+        user_data = response.json()
+        if not user_data.get("success"):
+            raise HTTPException(status_code=401, detail="Not authenticated: Invalid session")
+        
+        return user_data["user"] # Return user info if authenticated
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Auth server responded with error: {e.response.status_code} - {e.response.text}")
+        raise HTTPException(status_code=401, detail="Not authenticated: Session verification failed")
+    except httpx.RequestError as e:
+        logger.error(f"Could not connect to auth server: {e}")
+        raise HTTPException(status_code=500, detail="Authentication service unavailable")
+    except Exception as e:
+        logger.error(f"Unexpected error during authentication: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error during authentication")
+
 
 # --- Pydantic Models ---
 class IngestRequest(BaseModel):
@@ -66,11 +99,36 @@ class IngestRequest(BaseModel):
 class ChatRequest(BaseModel):
     user_query: str
     selected_text: Optional[str] = None
+    mode: Optional[str] = "standard" # "standard" or "socratic"
 
 class ChatResponse(BaseModel):
     response: str
     # Optionally, include source information here
     # sources: List[Dict[str, Any]] = []
+
+# --- System Prompts ---
+SYSTEM_PROMPTS = {
+    "standard": (
+        "You are a helpful assistant for a digital book reader. "
+        "Answer the user's question based strictly on the provided context from the book. "
+        "If the answer cannot be found in the context, state that you don't have enough information from the book. "
+        "Do not hallucinate content. Be concise and to the point."
+    ),
+    "socratic": "" # Will be loaded from file
+}
+
+def load_socratic_prompt():
+    try:
+        with open("agent/socratic_tutor.md", "r", encoding="utf-8") as f:
+            SYSTEM_PROMPTS["socratic"] = f.read()
+        logger.info("Loaded Socratic Tutor prompt from agent/socratic_tutor.md")
+    except Exception as e:
+        logger.error(f"Failed to load Socratic Tutor prompt: {e}")
+        # Fallback to a basic Socratic prompt if file fails
+        SYSTEM_PROMPTS["socratic"] = (
+            "You are a Socratic Tutor. Guide the user to the answer using the provided context. "
+            "Do not provide the direct answer immediately. Ask a guiding question."
+        )
 
 
 
@@ -80,21 +138,29 @@ async def startup_event():
     """
     Initialize clients and database connections on app startup.
     """
-    global openai_client, qdrant_client
+    global openai_client, qdrant_client, http_client
 
     logger.info("Initializing application resources...")
 
     try:
         openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
         qdrant_client = AsyncQdrantClient(url=settings.QDRANT_URL, api_key=settings.QDRANT_API_KEY)
+        http_client = httpx.AsyncClient() # Initialize httpx client
 
+        # Load system prompts
+        load_socratic_prompt()
 
         # Ensure Qdrant collection exists
-        await qdrant_client.recreate_collection(
-            collection_name=QDRANT_COLLECTION_NAME,
-            vectors_config=models.VectorParams(size=1536, distance=models.Distance.COSINE),
-        )
-        logger.info(f"Qdrant collection '{QDRANT_COLLECTION_NAME}' ensured.")
+        try:
+            await qdrant_client.get_collection(QDRANT_COLLECTION_NAME)
+            logger.info(f"Qdrant collection '{QDRANT_COLLECTION_NAME}' exists.")
+        except Exception:
+            logger.info(f"Qdrant collection '{QDRANT_COLLECTION_NAME}' not found. Creating...")
+            await qdrant_client.create_collection(
+                collection_name=QDRANT_COLLECTION_NAME,
+                vectors_config=models.VectorParams(size=1536, distance=models.Distance.COSINE),
+            )
+            logger.info(f"Qdrant collection '{QDRANT_COLLECTION_NAME}' created.")
 
 
 
@@ -109,13 +175,17 @@ async def shutdown_event():
     """
     Close clients and database connections on app shutdown.
     """
-    global qdrant_client
+    global qdrant_client, http_client
 
     logger.info("Shutting down application resources...")
 
     if qdrant_client:
         await qdrant_client.close()
         logger.info("Qdrant client closed.")
+    
+    if http_client:
+        await http_client.aclose()
+        logger.info("HTTP client closed.")
 
 
     logger.info("Application resources shut down.")
@@ -213,7 +283,7 @@ async def search_qdrant(query_embedding: List[float], limit: int = 5) -> List[Di
 
 # --- FastAPI Endpoints ---
 @app.post("/ingest", response_model=Dict[str, str])
-async def ingest_data(request: IngestRequest):
+async def ingest_data(request: IngestRequest, user: Dict[str, Any] = Depends(authenticate_user)):
     """
     Ingests raw text (e.g., a book chapter), chunks it, generates embeddings,
     and stores it in Qdrant.
@@ -251,7 +321,7 @@ async def ingest_data(request: IngestRequest):
 
 
 @app.post("/chat", response_model=ChatResponse)
-async def chat_with_rag(request: ChatRequest):
+async def chat_with_rag(request: ChatRequest, user: Dict[str, Any] = Depends(authenticate_user)):
     """
     Answers user queries using Retrieval-Augmented Generation (RAG).
     Prioritizes `selected_text` if provided.
@@ -298,12 +368,14 @@ async def chat_with_rag(request: ChatRequest):
 
 
     # --- OpenAI Chat Completion ---
+    
+    # Determine base system prompt
+    mode = request.mode if request.mode in SYSTEM_PROMPTS else "standard"
+    base_system_prompt = SYSTEM_PROMPTS[mode]
+
     messages = [
         {"role": "system", "content": (
-            "You are a helpful assistant for a digital book reader. "
-            "Answer the user's question based strictly on the provided context from the book. "
-            "If the answer cannot be found in the context, state that you don't have enough information from the book. "
-            "Do not hallucinate content. Be concise and to the point."
+            f"{base_system_prompt}"
             f"\n\n{system_prompt_content}"
         )},
         {"role": "user", "content": request.user_query}

@@ -1,0 +1,25 @@
+{
+  "name": "auth-server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "tsx watch src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@hono/node-server": "^1.19.6",
+    "better-auth": "^1.4.4",
+    "better-sqlite3": "^12.5.0",
+    "dotenv": "^17.2.3",
+    "hono": "^4.10.7"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0"
+  }
+}

@@ -1,5 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import styles from './styles.module.css';
+import { useAuth } from '../../lib/AuthContext'; // Import useAuth
+import { useHistory } from '@docusaurus/router';
+import useBaseUrl from '@docusaurus/useBaseUrl';
 
 interface Message {
   id: string;
@@ -14,6 +17,9 @@ export default function Chatbot() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { session, isLoading: authLoading } = useAuth(); // Get session and authLoading state
+  const history = useHistory();
+  const loginPath = useBaseUrl('/login');
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -26,6 +32,12 @@ export default function Chatbot() {
   const handleSendMessage = async () => {
     if (!input.trim()) return;
 
+    if (!session) {
+        // If not logged in, redirect to login page
+        history.push(loginPath);
+        return;
+    }
+
     const userMessage: Message = {
       id: Date.now().toString(),
       text: input,
@@ -36,17 +48,30 @@ export default function Chatbot() {
     setInput('');
     setIsLoading(true);
 
+    const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+    };
+
+    // Add Authorization header with the session token
+    if (session && session.id) {
+        headers['Authorization'] = `Bearer ${session.id}`;
+    }
+
     try {
       // Call the FastAPI backend
       const response = await fetch('https://caridad-nosogeographic-faye.ngrok-free.dev/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: headers,
         body: JSON.stringify({
           user_query: userMessage.text,
         }),
       });
+
+      if (response.status === 401) {
+        // Unauthorized, redirect to login
+        history.push(loginPath);
+        return;
+      }
 
       if (!response.ok) {
         throw new Error('Network response was not ok');
@@ -81,6 +106,11 @@ export default function Chatbot() {
     }
   };
 
+  // Optionally, show a loading state for authentication
+  if (authLoading) {
+    return <div className={styles.chatContainer}>Loading authentication...</div>;
+  }
+
   return (
     <div className={styles.chatContainer}>
       <div className={styles.messagesContainer}>
@@ -109,14 +139,14 @@ export default function Chatbot() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyPress={handleKeyPress}
-          disabled={isLoading}
+          disabled={isLoading || !session} // Disable input if not logged in
         />
         <button 
           className={styles.sendButton} 
           onClick={handleSendMessage}
-          disabled={isLoading || !input.trim()}
+          disabled={isLoading || !input.trim() || !session} // Disable button if not logged in
         >
-          Send
+          {session ? 'Send' : 'Login to Chat'}
         </button>
       </div>
     </div>

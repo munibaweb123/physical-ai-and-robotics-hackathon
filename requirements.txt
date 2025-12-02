@@ -6,3 +6,4 @@ qdrant-client
 
 pydantic
 pydantic-settings
+httpx

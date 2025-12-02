@@ -50,6 +50,29 @@ const config: Config = {
     },
   },
 
+  plugins: [
+    function (context, options) {
+      return {
+        name: 'docusaurus-plugin-proxy',
+        configureWebpack(config, isServer) {
+          if (isServer) return {};
+          return {
+            devServer: {
+              proxy: [
+                {
+                  context: ['/api'],
+                  target: 'http://localhost:4000',
+                  secure: false,
+                  changeOrigin: true,
+                },
+              ],
+            },
+          };
+        },
+      };
+    },
+  ],
+
   presets: [
     [
       'classic',
@@ -106,6 +129,20 @@ const config: Config = {
           to: '/chatbot',
           label: 'AI Assistant',
           position: 'left',
+        },
+        {
+          to: '/login',
+          label: 'Login',
+          position: 'right',
+        },
+        {
+          to: '/register',
+          label: 'Register',
+          position: 'right',
+        },
+        {
+          type: 'custom-logout-button', // Custom component for logout
+          position: 'right',
         },
         {
           type: 'localeDropdown',
