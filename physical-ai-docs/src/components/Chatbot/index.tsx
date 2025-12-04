@@ -3,6 +3,7 @@ import styles from './styles.module.css';
 import { useAuth } from '../../lib/AuthContext'; // Import useAuth
 import { useHistory } from '@docusaurus/router';
 import useBaseUrl from '@docusaurus/useBaseUrl';
+import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 
 interface Message {
   id: string;
@@ -11,6 +12,9 @@ interface Message {
 }
 
 export default function Chatbot() {
+  const { siteConfig } = useDocusaurusContext();
+  const apiBaseUrl = (siteConfig.customFields?.apiBaseUrl as string) || 'http://localhost:8000';
+
   const [messages, setMessages] = useState<Message[]>([
     { id: '1', text: 'Hello! I am your AI assistant for this course. Ask me anything about Physical AI, ROS 2, or the provided reading materials.', sender: 'bot' }
   ]);
@@ -62,7 +66,7 @@ export default function Chatbot() {
 
     try {
       // Call the FastAPI backend
-      const response = await fetch('https://caridad-nosogeographic-faye.ngrok-free.dev/chat', {
+      const response = await fetch(`${apiBaseUrl}/chat`, {
         method: 'POST',
         headers: headers,
         body: JSON.stringify({
