@@ -38,7 +38,7 @@ export const auth = betterAuth({
             name: SESSION_COOKIE_NAME,
             secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
             httpOnly: true, // Prevent client-side JavaScript from accessing cookie
-            sameSite: "lax",
+            sameSite: "none", // REQUIRED for cross-domain (Vercel -> Hugging Face)
             path: '/', // Accessible across the entire domain
             maxAge: 60 * 60 * 24 * 7, // 1 week
         },
