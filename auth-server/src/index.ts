@@ -92,7 +92,7 @@ app.get('/api/auth/user', async (c) => {
     return c.json({ user: session.user });
 });
 
-const port = 4000;
+const port = 7860;
 console.log(`Server is running on port ${port}`);
 
 serve({
