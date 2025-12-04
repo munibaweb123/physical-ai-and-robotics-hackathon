@@ -20,7 +20,7 @@ interface DatabaseSchema {
     session: SessionTable;
 }
 
-const sqlite = new Database('./auth.db');
+const sqlite = new Database('./auth_v2.db');
 
 export const db = new Kysely<DatabaseSchema>({
     dialect: new SqliteDialect({
