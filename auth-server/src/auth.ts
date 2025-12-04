@@ -10,8 +10,13 @@ config(); // Load environment variables
 const SESSION_COOKIE_NAME = 'auth_session';
 const SESSION_COOKIE_SECRET = process.env.SESSION_COOKIE_SECRET || 'super-secret-key-please-change-me-in-production'; // Change this in production!
 
+// Use environment variable for the base URL of the Auth Server
+const AUTH_SERVER_BASE_URL = process.env.BETTER_AUTH_URL || 'http://localhost:7860';
+// Use environment variable for the frontend URL (your Vercel deployment)
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000'; // Replace with your Vercel URL in production
+
 export const auth = betterAuth({
-    // baseURL: "http://localhost:4000/api/auth", // Critical: Tell better-auth where it lives
+    baseURL: `${AUTH_SERVER_BASE_URL}/api/auth`, // Critical: Tell better-auth where it lives
     emailAndPassword: {
         enabled: true,
     },
@@ -21,9 +26,10 @@ export const auth = betterAuth({
     plugins: [
         bearer()
     ],
-    trustedOrigins: ['http://localhost:3000'], // Trust the frontend origin
+    // Trust the frontend origin (your Vercel app)
+    trustedOrigins: [FRONTEND_URL],
     security: {
-        allowedOrigins: ['http://localhost:3000'],
+        allowedOrigins: [FRONTEND_URL],
     },
     secret: SESSION_COOKIE_SECRET,
     // Configure how sessions are managed
