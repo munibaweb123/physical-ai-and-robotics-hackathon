@@ -50,6 +50,10 @@ const config: Config = {
     },
   },
 
+  customFields: {
+    apiBaseUrl: process.env.NEXT_PUBLIC_API_URL,
+  },
+
   plugins: [],
 
   presets: [
