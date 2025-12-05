@@ -36,7 +36,11 @@ export const auth = betterAuth({
     session: {
         cookie: {
             name: SESSION_COOKIE_NAME,
-            secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+            // CRITICAL: Vercel (Frontend) -> Hugging Face (Backend) is Cross-Site.
+            // Cross-Site cookies MUST be "SameSite=None" AND "Secure".
+            // If NODE_ENV is missing/wrong, "Secure" might default to false, causing the browser to block the cookie.
+            // We force Secure if we are in production OR if our base URL is HTTPS.
+            secure: process.env.NODE_ENV === 'production' || process.env.BETTER_AUTH_URL?.startsWith("https"),
             httpOnly: true, // Prevent client-side JavaScript from accessing cookie
             sameSite: "none", // REQUIRED for cross-domain (Vercel -> Hugging Face)
             path: '/', // Accessible across the entire domain
