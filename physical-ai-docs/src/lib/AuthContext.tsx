@@ -32,7 +32,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     useEffect(() => {
+        // Initial session fetch
         refreshSession();
+
+        // Subscribe to auth state changes
+        const { data: authListener } = authClient.onAuthStateChange((event, session) => {
+            console.log(`Auth event: ${event}`, session);
+            setSession(session);
+            setUser(session?.user ?? null);
+        });
+
+        // Cleanup subscription on unmount
+        return () => {
+            authListener?.subscription.unsubscribe();
+        };
     }, []);
 
     return (
