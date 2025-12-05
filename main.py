@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = Field(..., description="OpenAI API Key")
     QDRANT_URL: str = Field(..., description="Qdrant Cloud URL")
     QDRANT_API_KEY: str = Field(..., description="Qdrant API Key")
-    AUTH_SERVER_URL: str = Field("http://localhost:4000", description="URL of the Node.js auth server")
+    AUTH_SERVER_URL: str = Field("http://localhost:7860", description="URL of the Node.js auth server")
 
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
