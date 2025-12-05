@@ -1,5 +1,5 @@
 import React from 'react';
-import { AuthProvider } from '../../src/lib/AuthContext';
+import { AuthProvider } from '../lib/AuthContext';
 
 // Default implementation, that you can customize
 function Root({ children }) {
