@@ -52,7 +52,7 @@ const config: Config = {
 
   customFields: {
     apiBaseUrl: process.env.NEXT_PUBLIC_API_URL,
-    authBaseUrl: process.env.BETTER_AUTH_URL,
+    authBaseUrl: process.env.BETTER_AUTH_URL || 'http://localhost:4000',
   },
 
   plugins: [],
