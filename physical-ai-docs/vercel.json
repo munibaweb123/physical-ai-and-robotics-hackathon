@@ -1,7 +1,0 @@
-{
-  "build": {
-    "env": {
-      "BETTER_AUTH_URL": "@better_auth_url"
-    }
-  }
-}
