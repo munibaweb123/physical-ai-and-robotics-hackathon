@@ -1,0 +1,340 @@
+# API Contracts: Chapter Content Personalization
+
+## Chapter Personalization Toggle API
+
+### 1. Toggle Chapter Personalization (POST /api/chapters/{chapterId}/personalize)
+
+**Purpose**: Endpoint to activate or deactivate personalization for a specific chapter
+
+**Request**:
+```
+POST /api/chapters/{chapterId}/personalize
+Content-Type: application/json
+Authorization: Bearer {token}
+```
+
+**Path Parameters**:
+- `chapterId`: Unique identifier for the chapter
+
+**Request Body**:
+```json
+{
+  "activate": true,
+  "preferences": {
+    "complexityLevel": "intermediate",
+    "preferredExamples": ["practical", "case-studies"],
+    "focusAreas": ["software", "practice"]
+  }
+}
+```
+
+**Response (200 OK)**:
+```json
+{
+  "success": true,
+  "chapterId": "ch-001-introduction",
+  "personalizationActive": true,
+  "adaptationsApplied": [
+    "simplified-explanation",
+    "practical-examples",
+    "intermediate-complexity"
+  ],
+  "message": "Personalization activated for chapter"
+}
+```
+
+**Response (400 Bad Request)**:
+```json
+{
+  "success": false,
+  "error": "Invalid input data",
+  "details": {
+    "chapterId": "Chapter ID is required and must be valid",
+    "activate": "Activate flag must be boolean"
+  }
+}
+```
+
+**Response (401 Unauthorized)**:
+```json
+{
+  "success": false,
+  "error": "Authentication required"
+}
+```
+
+**Response (404 Not Found)**:
+```json
+{
+  "success": false,
+  "error": "Chapter not found"
+}
+```
+
+### 2. Get Chapter Personalization State (GET /api/chapters/{chapterId}/personalize)
+
+**Purpose**: Endpoint to retrieve the current personalization state for a chapter
+
+**Request**:
+```
+GET /api/chapters/{chapterId}/personalize
+Authorization: Bearer {token}
+```
+
+**Path Parameters**:
+- `chapterId`: Unique identifier for the chapter
+
+**Response (200 OK)**:
+```json
+{
+  "chapterId": "ch-001-introduction",
+  "personalizationActive": true,
+  "currentSettings": {
+    "complexityLevel": "intermediate",
+    "preferredExamples": ["practical", "case-studies"],
+    "focusAreas": ["software", "practice"]
+  },
+  "adaptationsApplied": [
+    "simplified-explanation",
+    "practical-examples"
+  ],
+  "engagementMetrics": {
+    "timeSpent": 1200,
+    "scrollDepth": 0.85,
+    "interactionCount": 3
+  }
+}
+```
+
+**Response (401 Unauthorized)**:
+```json
+{
+  "success": false,
+  "error": "Authentication required"
+}
+```
+
+**Response (404 Not Found)**:
+```json
+{
+  "success": false,
+  "error": "Chapter not found or no personalization state"
+}
+```
+
+## Personalization Preferences API
+
+### 3. Update Personalization Preferences (PUT /api/user/personalization/preferences)
+
+**Purpose**: Endpoint to update user's global personalization preferences
+
+**Request**:
+```
+PUT /api/user/personalization/preferences
+Content-Type: application/json
+Authorization: Bearer {token}
+```
+
+**Request Body**:
+```json
+{
+  "complexityLevel": "intermediate",
+  "preferredExamples": ["practical", "case-studies"],
+  "focusAreas": ["software", "practice"],
+  "enabledFeatures": {
+    "adaptiveDifficulty": true,
+    "customExamples": true,
+    "terminologyAdjustment": false
+  }
+}
+```
+
+**Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "Personalization preferences updated successfully",
+  "preferences": {
+    "complexityLevel": "intermediate",
+    "preferredExamples": ["practical", "case-studies"],
+    "focusAreas": ["software", "practice"],
+    "enabledFeatures": {
+      "adaptiveDifficulty": true,
+      "customExamples": true,
+      "terminologyAdjustment": false
+    },
+    "updatedAt": "2025-12-20T10:00:00Z"
+  }
+}
+```
+
+**Response (400 Bad Request)**:
+```json
+{
+  "success": false,
+  "error": "Invalid preference data",
+  "details": {
+    "complexityLevel": "Must be one of: beginner, intermediate, advanced, expert"
+  }
+}
+```
+
+**Response (401 Unauthorized)**:
+```json
+{
+  "success": false,
+  "error": "Authentication required"
+}
+```
+
+### 4. Get User Personalization Preferences (GET /api/user/personalization/preferences)
+
+**Purpose**: Endpoint to retrieve user's global personalization preferences
+
+**Request**:
+```
+GET /api/user/personalization/preferences
+Authorization: Bearer {token}
+```
+
+**Response (200 OK)**:
+```json
+{
+  "complexityLevel": "intermediate",
+  "preferredExamples": ["practical", "case-studies"],
+  "focusAreas": ["software", "practice"],
+  "enabledFeatures": {
+    "adaptiveDifficulty": true,
+    "customExamples": true,
+    "terminologyAdjustment": false
+  },
+  "createdAt": "2025-12-01T09:00:00Z",
+  "updatedAt": "2025-12-20T10:00:00Z"
+}
+```
+
+**Response (401 Unauthorized)**:
+```json
+{
+  "success": false,
+  "error": "Authentication required"
+}
+```
+
+## Content Adaptation API
+
+### 5. Get Personalized Chapter Content (GET /api/chapters/{chapterId}/content/personalized)
+
+**Purpose**: Endpoint to retrieve chapter content with personalization applied
+
+**Request**:
+```
+GET /api/chapters/{chapterId}/content/personalized
+Authorization: Bearer {token}
+```
+
+**Path Parameters**:
+- `chapterId`: Unique identifier for the chapter
+
+**Query Parameters**:
+- `complexityOverride`: Optional override for complexity level (beginner, intermediate, advanced, expert)
+- `focusAreaOverride`: Optional override for focus area
+
+**Response (200 OK)**:
+```json
+{
+  "chapterId": "ch-001-introduction",
+  "title": "Introduction to Physical AI",
+  "content": "# Personalized Introduction to Physical AI\n\nThis section introduces the key concepts...",
+  "adaptationsApplied": [
+    {
+      "type": "difficulty-adjustment",
+      "appliedRule": "simplified-explanation",
+      "originalText": "The complex mathematical formulation of the control algorithms...",
+      "adaptedText": "The basic idea behind control algorithms is..."
+    },
+    {
+      "type": "example-substitution",
+      "appliedRule": "practical-example",
+      "originalText": "Consider the theoretical model where X = Y...",
+      "adaptedText": "Consider a robot arm that needs to pick up objects..."
+    }
+  ],
+  "relevanceScore": 0.85,
+  "metadata": {
+    "estimatedReadingTime": 1200,
+    "difficultyLevel": "intermediate",
+    "focusAreas": ["practical-applications", "robotics"]
+  }
+}
+```
+
+**Response (401 Unauthorized)**:
+```json
+{
+  "success": false,
+  "error": "Authentication required"
+}
+```
+
+**Response (404 Not Found)**:
+```json
+{
+  "success": false,
+  "error": "Chapter not found"
+}
+```
+
+## Personalization History API
+
+### 6. Get Personalization History (GET /api/user/personalization/history)
+
+**Purpose**: Endpoint to retrieve user's personalization history and engagement metrics
+
+**Request**:
+```
+GET /api/user/personalization/history?limit=10&page=1
+Authorization: Bearer {token}
+```
+
+**Query Parameters**:
+- `limit`: Number of records to return (default: 10, max: 50)
+- `page`: Page number for pagination (default: 1)
+- `chapterId`: Optional filter for specific chapter
+- `startDate`: Optional filter for start date (ISO 8601 format)
+- `endDate`: Optional filter for end date (ISO 8601 format)
+
+**Response (200 OK)**:
+```json
+{
+  "history": [
+    {
+      "id": "hist-001",
+      "chapterId": "ch-001-introduction",
+      "chapterTitle": "Introduction to Physical AI",
+      "personalizationActive": true,
+      "engagementMetrics": {
+        "timeSpent": 1200,
+        "scrollDepth": 0.85,
+        "completions": 1,
+        "helpRequests": 2
+      },
+      "adaptationsCount": 5,
+      "relevanceScore": 0.85,
+      "personalizedAt": "2025-12-20T09:30:00Z",
+      "viewedAt": "2025-12-20T10:00:00Z"
+    }
+  ],
+  "total": 25,
+  "page": 1,
+  "limit": 10
+}
+```
+
+**Response (401 Unauthorized)**:
+```json
+{
+  "success": false,
+  "error": "Authentication required"
+}
+```

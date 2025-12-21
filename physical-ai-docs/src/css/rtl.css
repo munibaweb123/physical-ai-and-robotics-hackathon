@@ -1,0 +1,128 @@
+/* RTL (Right-to-Left) CSS for Urdu text rendering */
+
+/* Apply RTL layout to Urdu content containers */
+.urdu-content {
+  direction: rtl;
+  text-align: right;
+}
+
+/* Ensure proper RTL formatting for common elements */
+.urdu-content h1,
+.urdu-content h2,
+.urdu-content h3,
+.urdu-content h4,
+.urdu-content h5,
+.urdu-content h6 {
+  text-align: right;
+  direction: rtl;
+}
+
+.urdu-content p {
+  text-align: right;
+  direction: rtl;
+  text-align-last: left; /* Align last line to left for better readability */
+}
+
+.urdu-content ul,
+.urdu-content ol {
+  direction: rtl;
+  text-align: right;
+  margin-right: 1.5rem;
+  margin-left: 0;
+}
+
+.urdu-content li {
+  text-align: right;
+  direction: rtl;
+}
+
+.urdu-content blockquote {
+  border-right: 4px solid #007cba;
+  border-left: none;
+  margin-right: 0;
+  margin-left: 1.5rem;
+  padding-right: 1rem;
+  padding-left: 0;
+  text-align: right;
+}
+
+.urdu-content table {
+  direction: rtl;
+  text-align: right;
+}
+
+.urdu-content table th,
+.urdu-content table td {
+  text-align: right;
+  direction: rtl;
+}
+
+.urdu-content code {
+  direction: ltr; /* Code should remain LTR even in RTL context */
+  unicode-bidi: embed;
+}
+
+.urdu-content pre {
+  direction: ltr; /* Preformatted text should remain LTR */
+  text-align: left;
+  direction: ltr;
+}
+
+/* RTL-specific styling for translation toggle button */
+.translation-toggle-container {
+  direction: ltr; /* Keep button container LTR for UI consistency */
+}
+
+.translation-toggle-btn {
+  margin-left: 0;
+  margin-right: 0.5rem; /* Adjust margins for RTL */
+}
+
+/* Adjust any floating elements */
+.urdu-content .float-left {
+  float: right;
+}
+
+.urdu-content .float-right {
+  float: left;
+}
+
+/* Adjust flexbox alignment for RTL */
+.urdu-content .flex-row {
+  flex-direction: row-reverse;
+}
+
+/* Ensure proper RTL behavior for interactive elements */
+.urdu-content input,
+.urdu-content textarea {
+  direction: rtl;
+  text-align: right;
+}
+
+/* RTL-specific margin and padding adjustments */
+.urdu-content .rtl-margin-left {
+  margin-right: 1rem;
+  margin-left: 0;
+}
+
+.urdu-content .rtl-margin-right {
+  margin-left: 1rem;
+  margin-right: 0;
+}
+
+.urdu-content .rtl-padding-left {
+  padding-right: 1rem;
+  padding-left: 0;
+}
+
+.urdu-content .rtl-padding-right {
+  padding-left: 1rem;
+  padding-right: 0;
+}
+
+/* Responsive adjustments for RTL */
+@media (max-width: 768px) {
+  .urdu-content {
+    font-size: 1.1rem; /* Slightly larger font for better Urdu readability on mobile */
+  }
+}

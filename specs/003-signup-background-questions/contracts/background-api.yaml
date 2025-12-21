@@ -1,0 +1,186 @@
+# API Contracts: Signup Background Questions
+
+## Background Information Collection API
+
+### 1. Update User Background Information (POST /api/user/background)
+
+**Purpose**: Endpoint to update user's background information during or after signup
+
+**Request**:
+```
+POST /api/user/background
+Content-Type: application/json
+Authorization: Bearer {token}
+```
+
+**Request Body**:
+```json
+{
+  "softwareExperienceLevel": "intermediate",
+  "hardwareExperienceLevel": "beginner",
+  "preferredDevelopmentEnvironments": ["vscode", "intellij"],
+  "technicalSkills": ["javascript", "python", "react"],
+  "hardwareSpecs": "windows laptop"
+}
+```
+
+**Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "Background information updated successfully",
+  "userId": "user-123"
+}
+```
+
+**Response (400 Bad Request)**:
+```json
+{
+  "success": false,
+  "error": "Invalid input data",
+  "details": {
+    "softwareExperienceLevel": "Must be one of: beginner, intermediate, advanced, expert"
+  }
+}
+```
+
+**Response (401 Unauthorized)**:
+```json
+{
+  "success": false,
+  "error": "Authentication required"
+}
+```
+
+### 2. Get User Background Information (GET /api/user/background)
+
+**Purpose**: Endpoint to retrieve user's background information
+
+**Request**:
+```
+GET /api/user/background
+Authorization: Bearer {token}
+```
+
+**Response (200 OK)**:
+```json
+{
+  "userId": "user-123",
+  "softwareExperienceLevel": "intermediate",
+  "hardwareExperienceLevel": "beginner",
+  "preferredDevelopmentEnvironments": ["vscode", "intellij"],
+  "technicalSkills": ["javascript", "python", "react"],
+  "hardwareSpecs": "windows laptop",
+  "updatedAt": "2025-12-20T10:00:00Z"
+}
+```
+
+**Response (401 Unauthorized)**:
+```json
+{
+  "success": false,
+  "error": "Authentication required"
+}
+```
+
+## Content Personalization API
+
+### 3. Get Personalized Content (GET /api/content/personalized)
+
+**Purpose**: Endpoint to retrieve content personalized based on user's background information
+
+**Request**:
+```
+GET /api/content/personalized?limit=10&page=1
+Authorization: Bearer {token}
+```
+
+**Response (200 OK)**:
+```json
+{
+  "content": [
+    {
+      "id": "content-1",
+      "title": "Getting Started with React for Beginners",
+      "description": "A beginner-friendly guide to React",
+      "level": "beginner",
+      "tags": ["react", "javascript", "frontend"],
+      "relevanceScore": 0.95,
+      "url": "/docs/react/beginners-guide"
+    },
+    {
+      "id": "content-2",
+      "title": "Advanced TypeScript Patterns",
+      "description": "Deep dive into advanced TypeScript concepts",
+      "level": "advanced",
+      "tags": ["typescript", "javascript"],
+      "relevanceScore": 0.87,
+      "url": "/docs/typescript/advanced-patterns"
+    }
+  ],
+  "total": 25,
+  "page": 1,
+  "limit": 10
+}
+```
+
+**Response (401 Unauthorized)**:
+```json
+{
+  "success": false,
+  "error": "Authentication required"
+}
+```
+
+## Authentication Integration
+
+### 4. Extended Registration Endpoint (POST /api/auth/register)
+
+**Purpose**: Enhanced registration endpoint that optionally accepts background information
+
+**Request**:
+```
+POST /api/auth/register
+Content-Type: application/json
+```
+
+**Request Body**:
+```json
+{
+  "email": "user@example.com",
+  "password": "securepassword",
+  "name": "John Doe",
+  "backgroundInfo": {
+    "softwareExperienceLevel": "intermediate",
+    "hardwareExperienceLevel": "beginner",
+    "preferredDevelopmentEnvironments": ["vscode"],
+    "technicalSkills": ["javascript", "react"],
+    "hardwareSpecs": "windows laptop"
+  }
+}
+```
+
+**Response (201 Created)**:
+```json
+{
+  "success": true,
+  "message": "User registered successfully",
+  "user": {
+    "id": "user-123",
+    "email": "user@example.com",
+    "name": "John Doe"
+  },
+  "backgroundInfoCollected": true
+}
+```
+
+**Response (400 Bad Request)**:
+```json
+{
+  "success": false,
+  "error": "Invalid registration data",
+  "details": {
+    "email": "Email is required and must be valid"
+  }
+}
+```

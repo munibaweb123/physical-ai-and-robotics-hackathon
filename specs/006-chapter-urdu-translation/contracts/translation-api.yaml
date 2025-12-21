@@ -1,0 +1,149 @@
+# API Contracts: Chapter Urdu Translation
+
+## Translation API Endpoints
+
+### 1. Translate Content (POST /api/translate)
+
+**Purpose**: Translate content from source language to target language (Urdu)
+
+**Request**:
+```
+POST /api/translate
+Content-Type: application/json
+Authorization: Bearer {user_token}
+```
+
+**Request Body**:
+```json
+{
+  "sourceLanguage": "en",
+  "targetLanguage": "ur",
+  "content": "The chapter content to translate",
+  "chapterId": "chapter-1-introduction"
+}
+```
+
+**Response (200 OK)**:
+```json
+{
+  "success": true,
+  "translatedContent": "مترجم کا مواد یہاں ہے",
+  "sourceLanguage": "en",
+  "targetLanguage": "ur",
+  "chapterId": "chapter-1-introduction",
+  "translationQuality": 95,
+  "translatedAt": "2025-12-21T10:30:00Z"
+}
+```
+
+**Response (400 Bad Request)**:
+```json
+{
+  "success": false,
+  "error": "Invalid request parameters",
+  "details": {
+    "content": "Content cannot be empty",
+    "targetLanguage": "Target language must be 'ur'"
+  }
+}
+```
+
+**Response (500 Server Error)**:
+```json
+{
+  "success": false,
+  "error": "Translation service unavailable",
+  "details": {
+    "message": "External translation API is currently down"
+  }
+}
+```
+
+### 2. Get User Translation Preferences (GET /api/user/preferences/translation)
+
+**Purpose**: Retrieve user's translation preferences
+
+**Request**:
+```
+GET /api/user/preferences/translation
+Content-Type: application/json
+Authorization: Bearer {user_token}
+```
+
+**Response (200 OK)**:
+```json
+{
+  "userId": "user-123",
+  "targetLanguage": "ur",
+  "autoTranslate": false,
+  "lastUsedAt": "2025-12-21T10:00:00Z",
+  "preferencesUpdatedAt": "2025-12-20T15:30:00Z"
+}
+```
+
+### 3. Update User Translation Preferences (PUT /api/user/preferences/translation)
+
+**Purpose**: Update user's translation preferences
+
+**Request**:
+```
+PUT /api/user/preferences/translation
+Content-Type: application/json
+Authorization: Bearer {user_token}
+```
+
+**Request Body**:
+```json
+{
+  "targetLanguage": "ur",
+  "autoTranslate": true
+}
+```
+
+**Response (200 OK)**:
+```json
+{
+  "success": true,
+  "preferences": {
+    "userId": "user-123",
+    "targetLanguage": "ur",
+    "autoTranslate": true,
+    "lastUsedAt": "2025-12-21T10:30:00Z"
+  }
+}
+```
+
+## Frontend Component Contracts
+
+### TranslationToggle Component Props
+```typescript
+interface TranslationToggleProps {
+  chapterId: string;
+  content: string;
+  sourceLanguage?: string; // default: 'en'
+  targetLanguage?: string; // default: 'ur'
+  onTranslationStart?: () => void;
+  onTranslationComplete?: (translatedContent: string) => void;
+  onTranslationError?: (error: string) => void;
+}
+```
+
+### ChapterTranslator Component Props
+```typescript
+interface ChapterTranslatorProps {
+  chapterId: string;
+  children: React.ReactNode;
+  defaultLanguage?: string; // default: 'en'
+  targetLanguage?: string;  // default: 'ur'
+}
+```
+
+## Content Preservation Requirements
+
+The translation functionality must preserve:
+- HTML formatting (headings, lists, code blocks, etc.)
+- Links and references within the content
+- Code syntax highlighting
+- Image positioning and captions
+- Table structures and formatting
+- Right-to-left text rendering for Urdu

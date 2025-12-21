@@ -1,0 +1,8 @@
+node_modules
+.env
+auth.db
+dist
+build
+src/*.test.ts
+.git
+.gitignore

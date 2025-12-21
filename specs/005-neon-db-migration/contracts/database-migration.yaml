@@ -1,0 +1,166 @@
+# API Contracts: Neon Database Migration
+
+## Database Migration Endpoints
+
+### 1. Database Migration Status Check (GET /api/db/migration/status)
+
+**Purpose**: Check the status of the database migration process
+
+**Request**:
+```
+GET /api/db/migration/status
+Content-Type: application/json
+Authorization: Bearer {admin_token}
+```
+
+**Response (200 OK)**:
+```json
+{
+  "migrationStatus": "completed",
+  "sourceDatabase": "sqlite",
+  "targetDatabase": "neon-postgresql",
+  "migratedTables": [
+    "users",
+    "user_background",
+    "sessions",
+    "accounts"
+  ],
+  "migratedRecords": 1542,
+  "completionPercentage": 100,
+  "startDate": "2025-12-21T10:00:00Z",
+  "completionDate": "2025-12-21T10:15:00Z",
+  "message": "Migration completed successfully"
+}
+```
+
+**Response (202 Pending)**:
+```json
+{
+  "migrationStatus": "in-progress",
+  "sourceDatabase": "sqlite",
+  "targetDatabase": "neon-postgresql",
+  "migratedTables": [
+    "users"
+  ],
+  "migratedRecords": 542,
+  "completionPercentage": 35,
+  "startDate": "2025-12-21T10:00:00Z",
+  "estimatedCompletion": "2025-12-21T10:25:00Z",
+  "message": "Migration in progress"
+}
+```
+
+**Response (500 Error)**:
+```json
+{
+  "success": false,
+  "error": "Migration failed",
+  "details": {
+    "failedTable": "user_background",
+    "errorMessage": "Data type mismatch in column X"
+  }
+}
+```
+
+### 2. Trigger Database Migration (POST /api/db/migration/start)
+
+**Purpose**: Initiate the database migration process from SQLite to Neon PostgreSQL
+
+**Request**:
+```
+POST /api/db/migration/start
+Content-Type: application/json
+Authorization: Bearer {admin_token}
+```
+
+**Request Body**:
+```json
+{
+  "sourceConnectionString": "file:./auth_v2.db",
+  "targetConnectionString": "postgresql://user:pass@ep-xxx.us-east-1.aws.neon.tech/dbname",
+  "migrateTables": [
+    "users",
+    "user_background",
+    "sessions",
+    "accounts"
+  ],
+  "validateDataIntegrity": true
+}
+```
+
+**Response (200 OK)**:
+```json
+{
+  "success": true,
+  "migrationId": "mig-001",
+  "status": "started",
+  "estimatedDurationMinutes": 15,
+  "message": "Migration process started successfully"
+}
+```
+
+**Response (400 Bad Request)**:
+```json
+{
+  "success": false,
+  "error": "Invalid migration parameters",
+  "details": {
+    "sourceConnectionString": "Connection string format is invalid",
+    "targetConnectionString": "Target database is not accessible"
+  }
+}
+```
+
+**Response (401 Unauthorized)**:
+```json
+{
+  "success": false,
+  "error": "Authentication required"
+}
+```
+
+### 3. Database Connection Health Check (GET /api/db/health)
+
+**Purpose**: Check the health and connectivity of the database connection
+
+**Request**:
+```
+GET /api/db/health
+Content-Type: application/json
+```
+
+**Response (200 OK)**:
+```json
+{
+  "status": "healthy",
+  "databaseType": "neon-postgresql",
+  "connectionPool": {
+    "activeConnections": 5,
+    "idleConnections": 3,
+    "maxConnections": 20
+  },
+  "responseTimeMs": 12,
+  "timestamp": "2025-12-21T10:30:00Z"
+}
+```
+
+**Response (503 Service Unavailable)**:
+```json
+{
+  "status": "unhealthy",
+  "databaseType": "neon-postgresql",
+  "error": "Connection timeout",
+  "timestamp": "2025-12-21T10:30:00Z"
+}
+```
+
+## Authentication API Contracts (Unchanged)
+
+The following API contracts remain unchanged after migration as they represent the application interface:
+
+### User Registration (POST /api/auth/register)
+### User Login (POST /api/auth/login)
+### User Profile (GET /api/auth/user/profile)
+### User Background Info (GET/PUT /api/auth/user/background)
+
+These endpoints will continue to function identically with the new Neon database backend.

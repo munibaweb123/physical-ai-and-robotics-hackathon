@@ -1,0 +1,13 @@
+__pycache__
+.git
+.env
+.venv
+venv
+node_modules
+.claude
+.gemini
+.specify
+history
+specs
+auth-server
+physical-ai-docs
