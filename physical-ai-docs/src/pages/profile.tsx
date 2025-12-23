@@ -202,7 +202,7 @@ function ProfilePage() {
           </div>
         </div>
 
-        <style jsx>{`
+        <style>{`
           .profile-section {
             margin-bottom: 2rem;
             padding: 1.5rem;

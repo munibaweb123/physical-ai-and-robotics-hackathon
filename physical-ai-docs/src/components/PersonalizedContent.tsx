@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from 'better-auth/react';
+import { useAuth } from '../lib/AuthContext';
+import { authBaseUrl } from '../lib/auth-client';
 
 interface ContentItem {
   id: string;
@@ -45,7 +46,7 @@ const PersonalizedContent: React.FC<PersonalizedContentProps> = ({
       setError(null);
 
       const response = await fetch(
-        `/api/content/personalized?limit=${itemsPerPage}&page=${currentPage}`,
+        `${authBaseUrl}/api/content/personalized?limit=${itemsPerPage}&page=${currentPage}`,
         {
           headers: {
             'Authorization': `Bearer ${session.accessToken}`,
@@ -137,7 +138,7 @@ const PersonalizedContent: React.FC<PersonalizedContentProps> = ({
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         .personalized-content {
           margin: 2rem 0;
         }

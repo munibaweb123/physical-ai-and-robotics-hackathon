@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from 'better-auth/react';
-import { getUserPreferences, updateUserPreferences, getChapterPersonalizationState, toggleChapterPersonalization } from '../services/personalization-service';
+import { useAuth } from '../lib/AuthContext';
+import { getChapterPersonalizationState } from '../services/personalization-service';
 
 interface PersonalizationControlsProps {
   chapterId: string;
@@ -252,7 +252,7 @@ const PersonalizationControls: React.FC<PersonalizationControlsProps> = ({
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         .personalization-controls {
           max-width: 600px;
           margin: 1rem 0;

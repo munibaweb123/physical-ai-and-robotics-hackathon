@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from 'better-auth/react';
+import { useAuth } from '../lib/AuthContext';
 import { submitBackgroundInfo, fetchBackgroundInfo } from '../services/background-service';
 
 interface PersonalizationToggleProps {
@@ -13,16 +13,16 @@ const PersonalizationToggle: React.FC<PersonalizationToggleProps> = ({
   onToggle,
   className = ''
 }) => {
-  const { session } = useAuth();
+  const { session, isLoading: authLoading } = useAuth();
   const [isActive, setIsActive] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [hasBackgroundInfo, setHasBackgroundInfo] = useState<boolean>(false);
 
   useEffect(() => {
-    if (session?.accessToken) {
+    if (session?.accessToken || (session as any)?.token) {
       loadPersonalizationState();
     }
-  }, [session?.accessToken, chapterId]);
+  }, [session, chapterId]);
 
   const loadPersonalizationState = async () => {
     setIsLoading(true);
@@ -53,8 +53,9 @@ const PersonalizationToggle: React.FC<PersonalizationToggleProps> = ({
   };
 
   const handleToggle = async () => {
-    if (!session?.accessToken) {
-      alert('You must be logged in to personalize content.');
+    const token = (session as any)?.token || session?.accessToken;
+    if (!token) {
+      alert('You must be logged in to enable personalization.');
       return;
     }
 
@@ -75,7 +76,7 @@ const PersonalizationToggle: React.FC<PersonalizationToggleProps> = ({
         preferredDevelopmentEnvironments: [],
         technicalSkills: [],
         hardwareSpecs: ''
-      }, newActiveState, chapterId);
+      }); // Removed 2nd/3rd params as submitBackgroundInfo doesn't take them
 
       if (result.success) {
         setIsActive(newActiveState);
@@ -91,6 +92,14 @@ const PersonalizationToggle: React.FC<PersonalizationToggleProps> = ({
       setIsLoading(false);
     }
   };
+
+  if (authLoading) {
+    return (
+      <div className={`personalization-toggle ${className}`}>
+        <p>Checking authentication...</p>
+      </div>
+    );
+  }
 
   if (!session) {
     return (
@@ -155,7 +164,7 @@ const PersonalizationToggle: React.FC<PersonalizationToggleProps> = ({
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         .personalization-toggle {
           margin: 1rem 0;
           padding: 1rem;

@@ -229,7 +229,7 @@ const BackgroundInfoEditForm: React.FC<BackgroundInfoEditFormProps> = ({
         )}
       </form>
 
-      <style jsx>{`
+      <style>{`
         .background-info-edit-form {
           margin-top: 1rem;
         }

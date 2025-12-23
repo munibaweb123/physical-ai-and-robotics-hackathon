@@ -16,6 +16,7 @@ from datetime import datetime
 import httpx # Import httpx
 
 from services.personalization_engine import PersonalizationEngine
+from auth_utils import decode_jwt_token, extract_user_id_from_token
 
 # Load environment variables from .env file
 load_dotenv()
@@ -29,7 +30,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = Field(..., description="OpenAI API Key")
     QDRANT_URL: str = Field(..., description="Qdrant Cloud URL")
     QDRANT_API_KEY: str = Field(..., description="Qdrant API Key")
-    AUTH_SERVER_URL: str = Field("http://localhost:7860", description="URL of the Node.js auth server")
+    AUTH_SERVER_URL: str = Field("http://localhost:10000", description="URL of the Node.js auth server")
 
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -67,13 +68,23 @@ async def authenticate_user(authorization: str = Header(...)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated: Missing or invalid Authorization header")
 
-    session_id = authorization.split(" ")[1] # Extract session ID from Bearer token
+    token = authorization.split(" ")[1] # Extract token from Bearer token
 
     try:
         # Call the Node.js auth server to verify the session
+        # We send the token as a cookie so better-auth can verify it natively
+        # AND in the body for our manual fallback check in case cookie verification fails
+        # AND as Authorization header since we have the bearer plugin enabled!
+        headers = {
+            "Cookie": f"auth_session={token}",
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
         response = await http_client.post(
             f"{settings.AUTH_SERVER_URL}/api/auth/verify-session",
-            json={"token": session_id} # Pass session ID (token) in body
+            headers=headers,
+            json={"token": token} # Pass token in body as fallback
         )
         response.raise_for_status() # Raise for HTTP errors (4xx or 5xx)
 
@@ -1057,6 +1068,42 @@ async def delete_user_personalization_data(
     except Exception as e:
         logger.error(f"Error deleting user personalization data: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to delete personalization data")
+
+
+# --- Auth State Change Endpoint ---
+@app.post("/api/auth/on-auth-state-change")
+async def auth_state_change(request: Request):
+    """
+    Handle authentication state change events from the frontend.
+    This endpoint receives events when user signs in, signs out, etc.
+    """
+    try:
+        data = await request.json()
+        event_type = data.get("event")
+        session_data = data.get("session")
+
+        logger.info(f"Auth state change event: {event_type}")
+
+        # Process the event based on type
+        if event_type == "SIGNIN":
+            # Handle sign-in
+            logger.info("User signed in")
+            # You can store session info or update user state here
+        elif event_type == "SIGNOUT":
+            # Handle sign-out
+            logger.info("User signed out")
+            # You can clean up session info here
+        elif event_type == "SESSION_UPDATED":
+            # Handle session update
+            logger.info("Session updated")
+        elif event_type == "SESSION_EXPIRED":
+            # Handle session expiration
+            logger.info("Session expired")
+
+        return {"success": True, "event": event_type}
+    except Exception as e:
+        logger.error(f"Error handling auth state change: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to handle auth state change")
 
 
 # --- Health Check Endpoint (Optional but Recommended) ---

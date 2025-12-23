@@ -182,7 +182,7 @@ const PersonalizationHistory: React.FC<PersonalizationHistoryProps> = ({
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         .personalization-history {
           max-width: 800px;
           margin: 1rem 0;

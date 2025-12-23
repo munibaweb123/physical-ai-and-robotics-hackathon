@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from 'better-auth/react';
-import { getUserPreferences, updateUserPreferences } from '../services/personalization-service';
+import { useAuth } from '../lib/AuthContext';
+import { updateUserPreferences, getUserPreferences } from '../services/personalization-service';
 
 interface PersonalizationPreferencesProps {
   onSave?: (preferences: any) => void;
@@ -317,7 +317,7 @@ const PersonalizationPreferences: React.FC<PersonalizationPreferencesProps> = ({
         </div>
       </form>
 
-      <style jsx>{`
+      <style>{`
         .personalization-preferences {
           max-width: 600px;
           margin: 1rem 0;

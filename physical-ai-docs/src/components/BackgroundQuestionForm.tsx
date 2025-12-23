@@ -282,7 +282,7 @@ const BackgroundQuestionForm: React.FC<BackgroundQuestionFormProps> = ({
         )}
       </form>
 
-      <style jsx>{`
+      <style>{`
         .background-question-form {
           max-width: 600px;
           margin: 2rem auto;

@@ -1,6 +1,8 @@
 import {themes as prismThemes} from 'prism-react-renderer';
 import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
@@ -20,6 +22,16 @@ const config: Config = {
   // For GitHub pages deployment, it is often '/<projectName>/'
   
   baseUrl: '/',
+
+  stylesheets: [
+    {
+      href: 'https://cdn.jsdelivr.net/npm/katex@0.13.24/dist/katex.min.css',
+      type: 'text/css',
+      integrity:
+        'sha384-odtC+0UGzzFL/6PNoE8rX/SPcQDXBJ+uRepguP4QkPCm2LBxH3FA3y+fKSiJ+AmM',
+      crossorigin: 'anonymous',
+    },
+  ],
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
@@ -52,7 +64,7 @@ const config: Config = {
 
   customFields: {
     apiBaseUrl: process.env.NEXT_PUBLIC_API_URL,
-    authBaseUrl: process.env.BETTER_AUTH_URL || 'http://localhost:7860',
+    authBaseUrl: process.env.DOCUSAURUS_BETTER_AUTH_URL || 'http://localhost:10000',
   },
 
   plugins: [
@@ -117,12 +129,18 @@ const config: Config = {
     },
   ],
 
+  markdown: {
+    format: 'mdx',
+    mermaid: true,
+  },
   presets: [
     [
       'classic',
       {
         docs: {
           sidebarPath: './sidebars.ts',
+          remarkPlugins: [remarkMath],
+          rehypePlugins: [rehypeKatex],
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
           editUrl:
@@ -173,6 +191,11 @@ const config: Config = {
           to: '/chatbot',
           label: 'AI Assistant',
           position: 'left',
+        },
+        {
+          to: '/profile',
+          label: 'Profile',
+          position: 'right',
         },
         {
           to: '/login',
