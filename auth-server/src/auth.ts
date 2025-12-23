@@ -1,5 +1,6 @@
 import { betterAuth } from 'better-auth';
 import { bearer } from "better-auth/plugins";
+import { jwt } from "better-auth/plugins";
 import { config } from 'dotenv';
 
 // Import Drizzle adapter for Better Auth
@@ -16,7 +17,7 @@ const SESSION_COOKIE_NAME = 'auth_session';
 const BETTER_AUTH_SECRET = process.env.BETTER_AUTH_SECRET || 'super-secret-key-please-change-me-in-production'; // Change this in production!
 
 // Use environment variable for the base URL of the Auth Server
-const AUTH_SERVER_BASE_URL = process.env.BETTER_AUTH_URL || 'http://localhost:7860';
+const AUTH_SERVER_BASE_URL = process.env.BETTER_AUTH_URL || 'http://localhost:10000';
 // Use environment variable for the frontend URL (your Vercel deployment)
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000'; // Replace with your Vercel URL in production
 
@@ -41,6 +42,8 @@ export const auth = betterAuth({
     },
     plugins: [
         bearer()
+        // Note: JWT plugin is not used here to avoid schema conflicts
+        // JWT functionality is handled separately for backend verification
     ],
     // Trust the frontend origin (your Vercel app)
     trustedOrigins: [FRONTEND_URL],

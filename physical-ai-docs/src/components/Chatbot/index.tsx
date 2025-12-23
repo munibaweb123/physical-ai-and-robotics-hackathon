@@ -57,12 +57,14 @@ export default function Chatbot() {
     };
 
     // Add Authorization header with the session token
-    // The session from our AuthContext contains the access token in session.accessToken
-    if (session && session.accessToken) {
-        headers['Authorization'] = `Bearer ${session.accessToken}`;
-    } else if (session && session.id) {
+    // The session from our AuthContext contains the token
+    if (session && (session as any).token) {
+        headers['Authorization'] = `Bearer ${(session as any).token}`;
+    } else if (session && (session as any).accessToken) {
+        headers['Authorization'] = `Bearer ${(session as any).accessToken}`;
+    } else if (session && session.session?.id) {
          // Fallback if access token is missing in type but present in runtime or vice versa
-        headers['Authorization'] = `Bearer ${session.id}`;
+        headers['Authorization'] = `Bearer ${session.session.id}`;
     }
 
     try {

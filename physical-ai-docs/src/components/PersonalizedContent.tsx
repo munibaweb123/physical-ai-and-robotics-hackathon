@@ -100,19 +100,19 @@ const PersonalizedContent: React.FC<PersonalizedContentProps> = ({
       ) : (
         <div className="content-grid">
           {content.map((item) => (
-            <div key={item.id} className="content-card">
+            <div key={item?.id || Math.random().toString()} className="content-card">
               <h3>
-                <a href={item.url}>{item.title}</a>
+                <a href={item?.url || '#'}>{item?.title || 'Untitled'}</a>
               </h3>
-              <p className="description">{item.description}</p>
+              <p className="description">{item?.description || ''}</p>
               <div className="content-meta">
-                <span className="level">Level: {item.level}</span>
-                <span className="relevance">Relevance: {(item.relevanceScore * 100).toFixed(0)}%</span>
+                <span className="level">Level: {item?.level || 'N/A'}</span>
+                <span className="relevance">Relevance: {item?.relevanceScore ? (item.relevanceScore * 100).toFixed(0) : '0'}%</span>
               </div>
               <div className="tags">
-                {item.tags.map((tag, index) => (
+                {(item?.tags || []).map((tag, index) => (
                   <span key={index} className="tag">
-                    {tag}
+                    {tag || ''}
                   </span>
                 ))}
               </div>

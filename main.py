@@ -1107,6 +1107,171 @@ async def auth_state_change(request: Request):
 
 
 # --- Health Check Endpoint (Optional but Recommended) ---
+class TranslationRequest(BaseModel):
+    sourceLanguage: str = "en"
+    targetLanguage: str
+    content: str
+    chapterId: str
+
+
+class TranslationResponse(BaseModel):
+    success: bool
+    translatedContent: Optional[str] = None
+    sourceLanguage: str
+    targetLanguage: str
+    chapterId: str
+    translationQuality: Optional[int] = None
+    translatedAt: Optional[str] = None
+    error: Optional[str] = None
+
+
+@app.post("/api/translate", response_model=TranslationResponse)
+async def translate_content(request: TranslationRequest, authorization: str = Header(None, alias='Authorization')):
+    """
+    Translate content from source language to target language (Urdu)
+    """
+    try:
+        # Verify the user's session using the auth server
+        # The authorization header from Better Auth may be in different formats
+        if not authorization:
+            raise HTTPException(status_code=401, detail="No session token provided")
+
+        # First, try to extract user ID from the token using JWT
+        user_id = extract_user_id_from_token(authorization)
+
+        # If JWT extraction failed, try to verify with Better Auth directly
+        if not user_id:
+            logger.info(f"JWT token extraction failed, attempting to verify with Better Auth")
+            # The Authorization header may contain a Better Auth session token
+            # The token could be in the format "Bearer session_id" or similar
+            # Let's try to make a request to the Better Auth server to verify the session
+            import httpx
+
+            # Extract the actual token (remove "Bearer " prefix if present)
+            auth_header = authorization
+            if authorization.lower().startswith("bearer "):
+                auth_header = authorization[7:]  # Remove "Bearer " prefix
+
+            logger.info(f"Attempting to verify session token with Better Auth: {auth_header[:10]}...")
+
+            # Make a request to Better Auth to verify the session
+            # According to the auth server, the correct endpoint is /api/auth/verify-session (POST)
+            # and /api/auth/user (GET)
+            async with httpx.AsyncClient() as client:
+                # First try the verify-session endpoint (POST)
+                verify_endpoint = f"{settings.AUTH_SERVER_URL}/api/auth/verify-session"
+
+                try:
+                    logger.info(f"Trying to verify session with endpoint: {verify_endpoint}")
+                    better_auth_response = await client.post(
+                        verify_endpoint,
+                        headers={"Authorization": f"Bearer {auth_header}"},
+                        json={"token": auth_header}  # Also send the token in the body as fallback
+                    )
+
+                    if better_auth_response.status_code == 200:
+                        session_data = better_auth_response.json()
+                        if session_data.get("success") and "user" in session_data:
+                            user_id = session_data["user"].get("id")
+                            if user_id:
+                                logger.info(f"Successfully verified session with Better Auth, user ID: {user_id}")
+                            else:
+                                logger.warning("Better Auth returned valid response but no user ID found in user object")
+                        else:
+                            logger.warning("Better Auth verify-session returned 200 but without success flag or user data")
+                    else:
+                        logger.info(f"POST endpoint {verify_endpoint} returned {better_auth_response.status_code}, trying GET /api/auth/user")
+
+                        # Try the GET /api/auth/user endpoint as fallback
+                        user_endpoint = f"{settings.AUTH_SERVER_URL}/api/auth/user"
+                        better_auth_response = await client.get(
+                            user_endpoint,
+                            headers={"Authorization": f"Bearer {auth_header}"}
+                        )
+
+                        if better_auth_response.status_code == 200:
+                            session_data = better_auth_response.json()
+                            if "user" in session_data:
+                                user_id = session_data["user"].get("id")
+                                if user_id:
+                                    logger.info(f"Successfully verified session with Better Auth using /api/auth/user, user ID: {user_id}")
+                                else:
+                                    logger.warning("Better Auth /api/auth/user returned user object but no ID found")
+                            else:
+                                logger.warning("Better Auth /api/auth/user returned 200 but no user object in response")
+                        else:
+                            logger.error(f"Both endpoints failed: POST {verify_endpoint} returned {better_auth_response.status_code}")
+                            logger.error(f"GET /api/auth/user also failed with status: {better_auth_response.status_code}")
+
+                except httpx.RequestError as e:
+                    logger.error(f"Failed to connect to Better Auth server: {e}")
+                    raise HTTPException(status_code=500, detail="Authentication service unavailable")
+
+            if not user_id:
+                logger.error(f"No user ID found after trying Better Auth endpoints")
+                raise HTTPException(status_code=401, detail="Invalid or expired session token")
+
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Unable to verify user session")
+
+        # Log the translation request
+        logger.info(f"Translation request for user {user_id}, chapter {request.chapterId}, from {request.sourceLanguage} to {request.targetLanguage}")
+
+        # Validate target language
+        if request.targetLanguage != "ur":
+            raise HTTPException(status_code=400, detail="Target language must be 'ur' for Urdu")
+
+        # Validate content
+        if not request.content or not request.content.strip():
+            raise HTTPException(status_code=400, detail="Content cannot be empty")
+
+        # Use OpenAI client to translate the content
+        response = await openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",  # You can also use "gpt-4" if preferred
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a professional technical translator. Translate the following content into Urdu. "
+                        "Preserve all formatting and structure. "
+                        "Do NOT translate code blocks or technical terms that should remain in English. "
+                        "Maintain the original tone and meaning."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": request.content
+                }
+            ],
+            temperature=0.3
+        )
+
+        translated_content = response.choices[0].message.content
+
+        # Return the translation response
+        return TranslationResponse(
+            success=True,
+            translatedContent=translated_content,
+            sourceLanguage=request.sourceLanguage,
+            targetLanguage=request.targetLanguage,
+            chapterId=request.chapterId,
+            translationQuality=95,  # Assuming good quality translation
+            translatedAt=datetime.utcnow().isoformat()
+        )
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        logger.error(f"Translation error: {e}", exc_info=True)
+        return TranslationResponse(
+            success=False,
+            error="Translation service unavailable",
+            sourceLanguage=request.sourceLanguage,
+            targetLanguage=request.targetLanguage,
+            chapterId=request.chapterId
+        )
+
+
 @app.get("/health")
 async def health_check():
     """

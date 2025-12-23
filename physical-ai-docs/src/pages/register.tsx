@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import Layout from '@theme/Layout';
-import { authClient } from '../lib/auth-client';
+import { authClient, authBaseUrl } from '../lib/auth-client';
 import { useHistory } from '@docusaurus/router';
 import useBaseUrl from '@docusaurus/useBaseUrl';
 import styles from './login.module.css'; // Reusing login styles
@@ -34,7 +34,7 @@ function RegisterPage() {
   const handleBackgroundSubmit = async (backgroundInfo: any) => {
     try {
       // Submit background information to the API
-      const response = await fetch('/api/auth/user/background', {
+      const response = await fetch(`${authBaseUrl}/api/auth/user/background`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

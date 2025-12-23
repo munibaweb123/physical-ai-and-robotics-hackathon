@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useTranslation } from '../../contexts/TranslationContext';
 import TranslationToggle from '../TranslationToggle';
 import '../../css/rtl.css'; // Import RTL styles
@@ -19,28 +19,27 @@ const ChapterTranslator: React.FC<ChapterTranslatorProps> = ({
   const {
     isTranslated,
     translatedContent,
-    originalContent,
     error,
     setError
   } = useTranslation();
 
-  // Serialize React children to string for translation service
-  const contentString = useMemo(() => {
-    if (typeof children === 'string') {
-      return children;
-    } else if (React.isValidElement(children)) {
-      // For this implementation, we'll convert the element to a simple string representation
-      // In a real implementation, you might need a more sophisticated serialization method
-      return JSON.stringify(children.props);
-    } else if (Array.isArray(children)) {
-      return children.map(child =>
-        typeof child === 'string' ? child :
-        React.isValidElement(child) ? JSON.stringify(child.props) :
-        String(child)
-      ).join(' ');
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [extractedContent, setExtractedContent] = useState<string>("");
+
+  // Extract text content from the DOM after render
+  useEffect(() => {
+    if (contentRef.current) {
+      // Get the text content from the rendered DOM nodes
+      // We use innerText to preserve some formatting (newlines)
+      // or innerHTML if we want to preserve tags (but translation API might strictly need text)
+      // For now, let's try innerText for a cleaner translation input
+      const text = contentRef.current.innerText;
+      if (text && text.trim().length > 0) {
+        console.log(`Extracted text via DOM (len=${text.length}):`, text.substring(0, 50) + "...");
+        setExtractedContent(text);
+      }
     }
-    return String(children);
-  }, [children]);
+  }, [children, isTranslated]); // Re-extract if children change
 
   // Function to render content based on translation state
   const renderContent = () => {
@@ -49,6 +48,10 @@ const ChapterTranslator: React.FC<ChapterTranslatorProps> = ({
         <div className="translation-error">
           <p>Error: {error}</p>
           <button onClick={() => setError(null)}>Try Again</button>
+          <div className="original-content-fallback">
+             {/* Show original content even on error so page isn't broken */}
+             {children}
+          </div>
         </div>
       );
     }
@@ -63,8 +66,10 @@ const ChapterTranslator: React.FC<ChapterTranslatorProps> = ({
     }
 
     // Render original content
+    // We wrap it in a ref to extract text ONLY when not translated
+    // Use a conditional ref to ensure we don't hold onto nodes React wants to remove
     return (
-      <div className="original-content">
+      <div className="original-content" ref={contentRef}>
         {children}
       </div>
     );
@@ -75,13 +80,16 @@ const ChapterTranslator: React.FC<ChapterTranslatorProps> = ({
       <div className="translation-controls">
         <TranslationToggle
           chapterId={chapterId}
-          content={contentString}
+          content={extractedContent} // Pass the extracted DOM text
           targetLanguage={targetLanguage}
         />
       </div>
 
       <div className="chapter-content">
-        {renderContent()}
+        {/* We use a key based on isTranslated to force a clean re-render of the container */}
+        <div key={isTranslated ? 'translated' : 'original'}>
+          {renderContent()}
+        </div>
       </div>
     </div>
   );

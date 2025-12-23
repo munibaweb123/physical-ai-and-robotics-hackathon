@@ -186,62 +186,126 @@ app.get('/api/db/health', async (c) => {
 });
 
 // For Python backend verification, we will create a simple endpoint
-// that verifies the session and returns user info.
+// that verifies the session token (JWT or opaque) and returns user info.
 app.post('/api/auth/verify-session', async (c) => {
     try {
-        const body = await c.req.json();
-        const token = body.token;
+        console.log('Verifying session...');
+        
+        // 1. Try to verify using better-auth's native getSession (cookie-based or bearer)
+        const session = await auth.api.getSession({
+            headers: c.req.raw.headers
+        });
+
+        if (session) {
+            console.log(`Session verified successfully for user: ${session.user.email}`);
+            return c.json({ success: true, user: { id: session.user.id, email: session.user.email } });
+        }
+
+        // 2. Fallback: Check for manual token in body OR Authorization header
+        let token;
+        try {
+            const body = await c.req.json();
+            token = body.token;
+        } catch (e) { }
 
         if (!token) {
-            return c.json({ success: false, message: 'No token provided' }, 400);
+            const authHeader = c.req.header('Authorization');
+            if (authHeader && authHeader.startsWith('Bearer ')) {
+                token = authHeader.split(' ')[1];
+            }
         }
 
-        // Query DB directly for session
-        // better-auth usually stores the token as-is or hashed. 
-        // If hashed, this direct lookup might fail, but let's try.
-        const session = await db.selectFrom('session')
-            .selectAll()
-            .where('token', '=', token)
-            .executeTakeFirst();
+        if (token) {
+             console.log(`Checking manual token: ${token.substring(0, 10)}...`);
+             // Try manual DB lookup for the token (checking the token column)
+             const dbSession = await db.selectFrom('session')
+                .selectAll()
+                .where('token', '=', token)
+                .executeTakeFirst();
 
-        if (!session) {
-             // If not found, maybe it's because it's hashed? 
-             // But standard better-auth often stores session token directly for lookup performance.
-             return c.json({ success: false, message: 'Session not found' }, 401);
+            if (dbSession) {
+                 // Check expiry
+                 const expiresAt = new Date(dbSession.expiresAt);
+                 if (expiresAt > new Date()) {
+                     const user = await db.selectFrom('user')
+                        .select(['id', 'email'])
+                        .where('id', '=', dbSession.userId)
+                        .executeTakeFirst();
+                     
+                     if (user) {
+                         console.log(`Manual verification success for user: ${user.email}`);
+                         return c.json({ success: true, user: { id: user.id, email: user.email } });
+                     }
+                 } else {
+                     console.log('Manual token expired');
+                 }
+            }
         }
-        
-        if (new Date(session.expiresAt) < new Date()) {
-             return c.json({ success: false, message: 'Session expired' }, 401);
-        }
 
-        // Get user
-        const user = await db.selectFrom('user')
-            .selectAll()
-            .where('id', '=', session.userId)
-            .executeTakeFirst();
+        console.log('Session verification failed');
+        return c.json({ success: false, message: 'Invalid or expired session' }, 401);
 
-        if (!user) {
-            return c.json({ success: false, message: 'User not found' }, 401);
-        }
-
-        return c.json({ success: true, user: { id: user.id, email: user.email } });
     } catch (error) {
-        console.error('Session verification error:', error);
-        return c.json({ success: false, message: 'Internal server error during session verification' }, 500);
+        console.error('Session verification error details:', error);
+        if (error instanceof Error) {
+            console.error('Stack trace:', error.stack);
+        }
+        return c.json({ success: false, message: 'Internal server error during session verification', error: String(error) }, 500);
     }
+});
+
+// JWKS endpoint for the Python backend to verify JWT tokens
+app.get('/api/auth/jwks', async (c) => {
+    // For HS512 algorithm, we return an empty keys array since the secret is shared
+    // The Python backend will use the same BETTER_AUTH_SECRET to verify tokens
+    return c.json({
+        keys: []
+    });
 });
 
 // POST endpoint to update user background information
 app.post('/api/auth/user/background', async (c) => {
     try {
+        const headers = c.req.raw.headers;
+        console.log('User Background Headers:', JSON.stringify(Object.fromEntries(headers.entries())));
+        
         const session = await auth.api.getSession({
             headers: c.req.raw.headers
         });
 
         if (!session) {
+            // Fallback: Check for Bearer token manually if getSession (cookie-based) fails
+            const authHeader = c.req.header('Authorization');
+            if (authHeader && authHeader.startsWith('Bearer ')) {
+                const token = authHeader.split(' ')[1];
+                // Verify the opaque token against the session table
+                const dbSession = await db.selectFrom('session')
+                    .selectAll()
+                    .where('token', '=', token)
+                    .executeTakeFirst();
+
+                if (dbSession && dbSession.expiresAt > new Date()) {
+                     // Fetch user for this session
+                     const user = await db.selectFrom('user')
+                        .selectAll()
+                        .where('id', '=', dbSession.userId)
+                        .executeTakeFirst();
+                     
+                     if (user) {
+                         // Manually construct session object
+                         // @ts-ignore
+                         session = { session: dbSession, user: user };
+                     }
+                }
+            }
+        }
+
+        if (!session) {
+            console.log('Session verification failed for background update');
             return c.json({ success: false, error: 'Authentication required' }, 401);
         }
 
+        // @ts-ignore
         const userId = session.user.id;
         const body = await c.req.json();
 
@@ -261,22 +325,22 @@ app.post('/api/auth/user/background', async (c) => {
         // Sanitize the input
         const sanitizedData = sanitizeUserBackgroundInput(body);
 
-        // Prepare the update data
+        // Prepare the update data using snake_case to match the database schema
         const updateData: Record<string, any> = {};
         if (sanitizedData.softwareExperienceLevel !== undefined) {
-            updateData.softwareExperienceLevel = sanitizedData.softwareExperienceLevel;
+            updateData.software_experience_level = sanitizedData.softwareExperienceLevel;
         }
         if (sanitizedData.hardwareExperienceLevel !== undefined) {
-            updateData.hardwareExperienceLevel = sanitizedData.hardwareExperienceLevel;
+            updateData.hardware_experience_level = sanitizedData.hardwareExperienceLevel;
         }
         if (sanitizedData.preferredDevelopmentEnvironments !== undefined) {
-            updateData.preferredDevelopmentEnvironments = JSON.stringify(sanitizedData.preferredDevelopmentEnvironments);
+            updateData.preferred_development_environments = JSON.stringify(sanitizedData.preferredDevelopmentEnvironments);
         }
         if (sanitizedData.technicalSkills !== undefined) {
-            updateData.technicalSkills = JSON.stringify(sanitizedData.technicalSkills);
+            updateData.technical_skills = JSON.stringify(sanitizedData.technicalSkills);
         }
         if (sanitizedData.hardwareSpecs !== undefined) {
-            updateData.hardwareSpecs = sanitizedData.hardwareSpecs;
+            updateData.hardware_specs = sanitizedData.hardwareSpecs;
         }
 
         // Update the user in the database
@@ -292,7 +356,10 @@ app.post('/api/auth/user/background', async (c) => {
         });
     } catch (error) {
         console.error('Error updating background information:', error);
-        return c.json({ success: false, error: 'Internal server error' }, 500);
+        if (error instanceof Error) {
+            console.error(error.stack);
+        }
+        return c.json({ success: false, error: 'Internal server error', details: String(error) }, 500);
     }
 });
 
@@ -309,16 +376,16 @@ app.get('/api/auth/user/background', async (c) => {
 
         const userId = session.user.id;
 
-        // Get user from the database
+        // Get user from the database using snake_case columns
         const user = await db.selectFrom('user')
             .select([
                 'id',
-                'softwareExperienceLevel',
-                'hardwareExperienceLevel',
-                'preferredDevelopmentEnvironments',
-                'technicalSkills',
-                'hardwareSpecs',
-                'updatedAt'
+                'software_experience_level',
+                'hardware_experience_level',
+                'preferred_development_environments',
+                'technical_skills',
+                'hardware_specs',
+                'updated_at'
             ])
             .where('id', '=', userId)
             .executeTakeFirst();
@@ -327,21 +394,24 @@ app.get('/api/auth/user/background', async (c) => {
             return c.json({ success: false, error: 'User not found' }, 404);
         }
 
-        // Parse JSON fields if they exist
+        // Parse JSON fields if they exist and map back to camelCase for the API response
         const response: UserBackgroundResponse = {
             userId: user.id,
-            softwareExperienceLevel: user.softwareExperienceLevel || undefined,
-            hardwareExperienceLevel: user.hardwareExperienceLevel || undefined,
-            preferredDevelopmentEnvironments: user.preferredDevelopmentEnvironments ? JSON.parse(user.preferredDevelopmentEnvironments) : undefined,
-            technicalSkills: user.technicalSkills ? JSON.parse(user.technicalSkills) : undefined,
-            hardwareSpecs: user.hardwareSpecs || undefined,
-            updatedAt: user.updatedAt ? new Date(user.updatedAt).toISOString() : new Date().toISOString()
+            softwareExperienceLevel: (user as any).software_experience_level || undefined,
+            hardwareExperienceLevel: (user as any).hardware_experience_level || undefined,
+            preferredDevelopmentEnvironments: (user as any).preferred_development_environments ? JSON.parse((user as any).preferred_development_environments) : undefined,
+            technicalSkills: (user as any).technical_skills ? JSON.parse((user as any).technical_skills) : undefined,
+            hardwareSpecs: (user as any).hardware_specs || undefined,
+            updatedAt: (user as any).updated_at ? new Date((user as any).updated_at).toISOString() : new Date().toISOString()
         };
 
         return c.json(response);
     } catch (error) {
         console.error('Error retrieving background information:', error);
-        return c.json({ success: false, error: 'Internal server error' }, 500);
+        if (error instanceof Error) {
+            console.error(error.stack);
+        }
+        return c.json({ success: false, error: 'Internal server error', details: String(error) }, 500);
     }
 });
 
@@ -376,13 +446,13 @@ app.post('/api/auth/chapters/:chapterId/personalize', async (c) => {
             }, 400);
         }
 
-        // Prepare the update data for chapter personalization
+        // Prepare the update data for chapter personalization using snake_case
         const updateData: Record<string, any> = {
-            personalizationActive: body.activate || false
+            personalization_active: body.activate || false
         };
 
         if (body.preferences) {
-            updateData.personalizationPreferences = JSON.stringify(body.preferences);
+            updateData.personalization_preferences = JSON.stringify(body.preferences);
         }
 
         // In a real implementation, we would update a separate table for chapter personalization
@@ -420,18 +490,18 @@ app.get('/api/auth/chapters/:chapterId/personalize', async (c) => {
         const chapterId = c.req.param('chapterId');
         const userId = session.user.id;
 
-        // Get user from the database
+        // Get user from the database using snake_case columns
         const user = await db.selectFrom('user')
             .select([
                 'id',
-                'softwareExperienceLevel',
-                'hardwareExperienceLevel',
-                'preferredDevelopmentEnvironments',
-                'technicalSkills',
-                'hardwareSpecs',
-                'personalizationActive', // Assuming we have this field
-                'personalizationPreferences', // Assuming we have this field
-                'updatedAt'
+                'software_experience_level',
+                'hardware_experience_level',
+                'preferred_development_environments',
+                'technical_skills',
+                'hardware_specs',
+                'personalization_active', 
+                'personalization_preferences', 
+                'updated_at'
             ])
             .where('id', '=', userId)
             .executeTakeFirst();
@@ -440,15 +510,15 @@ app.get('/api/auth/chapters/:chapterId/personalize', async (c) => {
             return c.json({ success: false, error: 'User not found' }, 404);
         }
 
-        // Parse JSON fields if they exist
+        // Parse JSON fields and map to camelCase for response
         const response = {
             success: true,
             userId: user.id,
             chapterId: chapterId,
-            personalizationActive: user.personalizationActive || false,
+            personalizationActive: (user as any).personalization_active || false,
             adaptationsApplied: [], // Would be computed based on user profile in real implementation
-            currentSettings: user.personalizationPreferences ? JSON.parse(user.personalizationPreferences) : {},
-            lastViewedAt: user.updatedAt ? new Date(user.updatedAt).toISOString() : new Date().toISOString()
+            currentSettings: (user as any).personalization_preferences ? JSON.parse((user as any).personalization_preferences) : {},
+            lastViewedAt: (user as any).updated_at ? new Date((user as any).updated_at).toISOString() : new Date().toISOString()
         };
 
         return c.json(response);
@@ -478,7 +548,7 @@ app.all('/api/auth/*', async (c) => {
     return response;
 });
 
-const port = 7860;
+const port = 10000;
 console.log(`Server is running on port ${port}`);
 
 serve({
