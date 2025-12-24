@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { config } from 'dotenv';
-import { Pool } from '@neondatabase/serverless';
+import { Pool } from 'pg';
 import { Kysely, PostgresDialect } from 'kysely';
 import { Database } from './schema';
 
@@ -9,7 +9,10 @@ config(); // Load environment variables
 
 // PostgreSQL database connection
 const dbUrl = process.env.NEON_DATABASE_URL || '';
-const pool = new Pool({ connectionString: dbUrl, ssl: 'require' });
+const pool = new Pool({
+    connectionString: dbUrl,
+    ssl: { rejectUnauthorized: false }
+});
 
 const postgresDb = new Kysely<Database>({
     dialect: new PostgresDialect({

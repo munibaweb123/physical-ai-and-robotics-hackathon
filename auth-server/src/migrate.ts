@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { Pool } from '@neondatabase/serverless';
+import { Pool } from 'pg';
 import { Kysely, SqliteDialect, PostgresDialect } from 'kysely';
 import { Database as SqliteDatabase } from './schema';
 import { config } from 'dotenv';
@@ -18,7 +18,10 @@ const sqliteDb = new Kysely<SqliteDatabase>({
 
 // PostgreSQL database connection (target)
 const dbUrl = process.env.NEON_DATABASE_URL || '';
-const pool = new Pool({ connectionString: dbUrl, ssl: 'require' });
+const pool = new Pool({
+    connectionString: dbUrl,
+    ssl: { rejectUnauthorized: false }
+});
 
 const postgresDb = new Kysely<SqliteDatabase>({
     dialect: new PostgresDialect({
