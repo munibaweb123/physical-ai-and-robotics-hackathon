@@ -1,12 +1,8 @@
-import { Pool, neonConfig } from '@neondatabase/serverless';
+import { Pool } from 'pg';
 import { Kysely, PostgresDialect } from 'kysely';
 import { config } from 'dotenv';
-import ws from 'ws';
 
 config(); // Load environment variables
-
-// Configure Neon to use WebSocket polyfill for serverless environments
-neonConfig.webSocketConstructor = ws;
 
 // Define the database schema types
 interface UserTable {
@@ -74,12 +70,12 @@ interface DatabaseSchema {
 const dbUrl = process.env.NEON_DATABASE_URL || '';
 const pool = new Pool({
     connectionString: dbUrl,
-    ssl: 'require',
-    // Connection pool configuration for Neon
-    min: 1,           // Minimum number of connections
-    max: 20,          // Maximum number of connections
-    idleTimeoutMillis: 30000, // Close idle connections after 30 seconds
-    connectionTimeoutMillis: 5000, // Timeout for creating new connections
+    ssl: { rejectUnauthorized: false }, // Required for Neon
+    // Connection pool configuration
+    min: 1,
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
 });
 
 export const db = new Kysely<DatabaseSchema>({
