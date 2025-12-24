@@ -9,6 +9,7 @@ import rehypeKatex from 'rehype-katex';
 const config: Config = {
   title: 'Physical AI & Humanoid Robotics',
   tagline: 'Mastering Embodied Intelligence and Humanoid Systems',
+
   favicon: 'img/favicon.ico',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
@@ -50,14 +51,17 @@ const config: Config = {
       en: {
         label: 'English',
         direction: 'ltr',
+        htmlLang: 'en-US',
       },
       ur: {
         label: 'اردو',
         direction: 'rtl',
+        htmlLang: 'ur-PK',
       },
       fr: {
         label: 'Français',
         direction: 'ltr',
+        htmlLang: 'fr-FR',
       },
     },
   },

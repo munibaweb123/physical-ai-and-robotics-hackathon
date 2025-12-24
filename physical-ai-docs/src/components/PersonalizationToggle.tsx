@@ -69,21 +69,24 @@ const PersonalizationToggle: React.FC<PersonalizationToggleProps> = ({
         return;
       }
 
-      // Call the API to update personalization state for this chapter
-      const result = await submitBackgroundInfo({
-        softwareExperienceLevel: '', // These would come from stored user preferences
-        hardwareExperienceLevel: '',
-        preferredDevelopmentEnvironments: [],
-        technicalSkills: [],
-        hardwareSpecs: ''
-      }); // Removed 2nd/3rd params as submitBackgroundInfo doesn't take them
+      // Import the personalization service
+      const { toggleChapterPersonalization } = await import('../services/personalization-service');
+
+      // Call the API to toggle personalization for this chapter
+      const result = await toggleChapterPersonalization(chapterId, newActiveState);
 
       if (result.success) {
         setIsActive(newActiveState);
         onToggle?.(newActiveState);
+
+        // Trigger content reload in PersonalizedChapterContent component
+        if (typeof (window as any).reloadPersonalizedContent === 'function') {
+          await (window as any).reloadPersonalizedContent();
+        }
       } else {
         console.error('Failed to update personalization state:', result.error);
-        alert('Failed to update personalization state. Please try again.');
+        console.error('Full result object:', result);
+        alert(`Failed to update personalization state: ${result.error || 'Unknown error'}. Check console for details.`);
       }
     } catch (error) {
       console.error('Error toggling personalization:', error);

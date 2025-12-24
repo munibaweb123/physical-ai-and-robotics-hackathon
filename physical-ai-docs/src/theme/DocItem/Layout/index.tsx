@@ -14,6 +14,7 @@ import ContentVisibility from '@theme/ContentVisibility';
 import type {Props} from '@theme/DocItem/Layout';
 
 import PersonalizationToggle from '@site/src/components/PersonalizationToggle';
+import PersonalizedChapterContent from '@site/src/components/PersonalizedChapterContent';
 import ChapterTranslator from '@site/src/components/ChapterTranslator';
 
 import styles from './styles.module.css';
@@ -46,9 +47,10 @@ export default function DocItemLayout({children}: Props): ReactNode {
   const docTOC = useDocTOC();
   const {metadata, frontMatter} = useDoc();
 
-  const chapterId = metadata.slug || metadata.permalink || 'unknown';
-  const showPersonalization = frontMatter.showPersonalization !== false;
-  const showTranslation = frontMatter.showTranslation !== false;
+  // Remove leading slash from slug/permalink to match backend API expectations
+  const rawChapterId = metadata.slug || metadata.permalink || 'unknown';
+  const chapterId = rawChapterId.startsWith('/') ? rawChapterId.substring(1) : rawChapterId;
+  const showPersonalization = (frontMatter as any).showPersonalization !== false;
 
   return (
     <div className="row">
@@ -59,8 +61,8 @@ export default function DocItemLayout({children}: Props): ReactNode {
           <article>
             <DocBreadcrumbs />
             <DocVersionBadge />
-            
-            <div className="doc-item-controls" style={{ 
+
+            <div className="doc-item-controls" style={{
               marginBottom: '1rem',
               padding: '1rem',
               backgroundColor: 'var(--ifm-color-emphasis-100)',
@@ -75,15 +77,14 @@ export default function DocItemLayout({children}: Props): ReactNode {
             </div>
 
             {docTOC.mobile}
-            
-            {showTranslation ? (
-              <ChapterTranslator chapterId={chapterId}>
+
+            {/* Wrap content with ChapterTranslator and PersonalizedChapterContent */}
+            <ChapterTranslator chapterId={chapterId}>
+              <PersonalizedChapterContent chapterId={chapterId}>
                 <DocItemContent>{children}</DocItemContent>
-              </ChapterTranslator>
-            ) : (
-              <DocItemContent>{children}</DocItemContent>
-            )}
-            
+              </PersonalizedChapterContent>
+            </ChapterTranslator>
+
             <DocItemFooter />
           </article>
           <DocItemPaginator />
