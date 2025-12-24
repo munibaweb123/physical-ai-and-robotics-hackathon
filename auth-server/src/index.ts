@@ -548,7 +548,7 @@ app.all('/api/auth/*', async (c) => {
     return response;
 });
 
-const port = 10000;
+const port = parseInt(process.env.PORT || '10000', 10);
 console.log(`Server is running on port ${port}`);
 
 serve({

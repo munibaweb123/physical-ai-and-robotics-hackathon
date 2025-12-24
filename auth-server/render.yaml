@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: physical-ai-auth
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_PROVIDER
+        value: neon
+      - key: SESSION_COOKIE_SECRET
+        generateValue: true
+      - key: NEON_DATABASE_URL
+        sync: false
+      - key: BETTER_AUTH_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+    healthCheckPath: /api/db/health
