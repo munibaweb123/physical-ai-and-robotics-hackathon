@@ -292,7 +292,9 @@ async def startup_event():
 
     try:
         openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-        qdrant_client = AsyncQdrantClient(url=settings.QDRANT_URL, api_key=settings.QDRANT_API_KEY)
+        # Strip any whitespace/newlines from the QDRANT_API_KEY to prevent header validation errors
+        qdrant_api_key = settings.QDRANT_API_KEY.strip() if settings.QDRANT_API_KEY else settings.QDRANT_API_KEY
+        qdrant_client = AsyncQdrantClient(url=settings.QDRANT_URL, api_key=qdrant_api_key)
         http_client = httpx.AsyncClient() # Initialize httpx client
         personalization_engine = PersonalizationEngine() # Initialize personalization engine
 
