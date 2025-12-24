@@ -1,8 +1,12 @@
-import { Pool } from '@neondatabase/serverless';
+import { Pool, neonConfig } from '@neondatabase/serverless';
 import { Kysely, PostgresDialect } from 'kysely';
 import { config } from 'dotenv';
+import ws from 'ws';
 
 config(); // Load environment variables
+
+// Configure Neon to use WebSocket polyfill for serverless environments
+neonConfig.webSocketConstructor = ws;
 
 // Define the database schema types
 interface UserTable {
