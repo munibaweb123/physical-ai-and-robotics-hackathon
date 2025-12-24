@@ -267,9 +267,9 @@ SYSTEM_PROMPTS = {
 
 def load_socratic_prompt():
     try:
-        with open("agent/socratic_tutor.md", "r", encoding="utf-8") as f:
+        with open(".claude/agents/socratic_tutor.md", "r", encoding="utf-8") as f:
             SYSTEM_PROMPTS["socratic"] = f.read()
-        logger.info("Loaded Socratic Tutor prompt from agent/socratic_tutor.md")
+        logger.info("Loaded Socratic Tutor prompt from .claude/agents/socratic_tutor.md")
     except Exception as e:
         logger.error(f"Failed to load Socratic Tutor prompt: {e}")
         # Fallback to a basic Socratic prompt if file fails
