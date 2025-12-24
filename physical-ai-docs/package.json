@@ -33,7 +33,7 @@
     "@docusaurus/tsconfig": "3.9.2",
     "@docusaurus/types": "3.9.2",
     "@testing-library/jest-dom": "^6.1.4",
-    "@testing-library/react": "^13.4.0",
+    "@testing-library/react": "^16.0.1",
     "@testing-library/user-event": "^14.4.3",
     "assert": "^2.1.0",
     "babel-loader": "^10.0.0",
