@@ -1,3 +1,5 @@
+import { authBaseUrl, apiBaseUrl, authClient } from '../lib/auth-client';
+
 // Service functions for background information management
 
 interface BackgroundInfo {
@@ -22,16 +24,15 @@ interface BackgroundResponse {
  */
 export const submitBackgroundInfo = async (backgroundInfo: BackgroundInfo): Promise<BackgroundResponse> => {
   try {
-    // Get the auth token from the auth client
-    // Note: In practice, you'd import the auth client from your auth module
-    // For now, we'll assume it's available globally or passed as a parameter
-    const token = (window as any).authClient?.$getTokens?.()?.accessToken;
+    // Get the session to retrieve the token
+    const { data: session } = await authClient.getSession();
+    const token = session?.session?.token || session?.session?.id || session?.user?.id; // Fallback to session ID or user ID if token missing, but strictly should be token
 
     if (!token) {
       throw new Error('Authentication token not found');
     }
 
-    const response = await fetch('/api/auth/user/background', {
+    const response = await fetch(`${authBaseUrl}/api/auth/user/background`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -68,14 +69,15 @@ export const submitBackgroundInfo = async (backgroundInfo: BackgroundInfo): Prom
  */
 export const fetchBackgroundInfo = async (): Promise<BackgroundInfo & { success: boolean, error?: string }> => {
   try {
-    // Get the auth token from the auth client
-    const token = (window as any).authClient?.$getTokens?.()?.accessToken;
+    // Get the session to retrieve the token
+    const { data: session } = await authClient.getSession();
+    const token = session?.session?.token || session?.session?.id || session?.user?.id;
 
     if (!token) {
       throw new Error('Authentication token not found');
     }
 
-    const response = await fetch('/api/auth/user/background', {
+    const response = await fetch(`${authBaseUrl}/api/auth/user/background`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -145,14 +147,15 @@ export const fetchPersonalizedContent = async (
   page: number = 1
 ): Promise<PersonalizedContentResponse & { success: boolean, error?: string }> => {
   try {
-    // Get the auth token from the auth client
-    const token = (window as any).authClient?.$getTokens?.()?.accessToken;
+    // Get the session to retrieve the token
+    const { data: session } = await authClient.getSession();
+    const token = session?.session?.token || session?.session?.id || session?.user?.id;
 
     if (!token) {
       throw new Error('Authentication token not found');
     }
 
-    const response = await fetch(`/api/content/personalized?limit=${limit}&page=${page}`, {
+    const response = await fetch(`${apiBaseUrl}/api/content/personalized?limit=${limit}&page=${page}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

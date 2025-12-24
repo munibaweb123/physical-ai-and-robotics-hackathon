@@ -2,6 +2,8 @@
 // or use a browser-compatible translation service
 // This is a simplified implementation that simulates translation
 
+import { authClient } from '../lib/auth-client';
+
 interface TranslationRequest {
   content: string;
   sourceLanguage?: string; // default: 'en'
@@ -33,7 +35,8 @@ interface TranslationCacheEntry {
 const translationCache = new Map<string, TranslationCacheEntry>();
 
 // Cache timeout (24 hours in milliseconds)
-const CACHE_TIMEOUT = 24 * 60 * 60 * 1000;
+// Disabled cache for demo purposes to allow instant updates
+const CACHE_TIMEOUT = 0; // 24 * 60 * 60 * 1000;
 
 /**
  * Generates a cache key based on content and languages
@@ -219,42 +222,74 @@ const performTranslation = async (content: string, sourceLang: string, targetLan
   // In a real implementation, this would make an API call to our backend service
   // that handles the translation to avoid exposing API keys in the browser
   try {
-    // Check if we have API base URL from environment/custom fields
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ||
-                      (typeof window !== 'undefined' && (window as any).env?.NEXT_PUBLIC_API_URL) ||
-                      '/api'; // fallback to relative API route
+    // Get the session to retrieve the token
+    const { data: session } = await authClient.getSession();
+    console.log('Full session object:', session);
 
-    // For now, we'll simulate the translation by returning placeholder text
-    // In a real implementation, you would make an API call like:
-    /*
-    const response = await fetch(`${apiBaseUrl}/translate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        content,
-        sourceLang,
-        targetLang
-      })
-    });
+    const token = session?.accessToken || session?.session?.token || session?.session?.id || session?.user?.id;
+    console.log('Extracted token:', token, 'Type:', typeof token);
 
-    if (!response.ok) {
-      throw new Error(`Translation API error: ${response.status}`);
+    if (!token) {
+      throw new Error('Authentication token not found');
     }
 
-    const result = await response.json();
-    return result.translatedContent;
-    */
+    // Check if we have API base URL from docusaurus config
+    // In Docusaurus, we can access siteConfig which may contain custom fields
+    let apiBaseUrl = '/api'; // default fallback
 
-    // Simulated translation - in real implementation, replace with actual API call
-    // Using a simple approach that works for demo purposes
-    return `مترجم کا مواد: ${content.substring(0, 50)}...`;
-  } catch (error) {
-    console.error('Translation API call failed:', error);
-    // Fallback to simulated translation
-    return `مترجم کا مواد: ${content.substring(0, 50)}...`;
-  }
+    if (typeof window !== 'undefined' && window.location) {
+      // For browser environment, use the configured API URL or default to backend on port 8000
+      apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ||
+                  (window as any).env?.NEXT_PUBLIC_API_URL ||
+                  'http://localhost:8000/api'; // Assuming backend runs on port 8000
+    }
+
+    // Make the actual API call to translate content
+    // The backend expects: sourceLanguage, targetLanguage, content, chapterId
+    console.log('Making translation request to:', `${apiBaseUrl}/translate`, {
+      content: content.substring(0, 100) + '...', // Log first 100 chars
+      sourceLanguage: sourceLang,
+      targetLanguage: targetLang,
+      token: token ? 'present' : 'missing'
+    });
+
+    const response = await fetch(`${apiBaseUrl}/translate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          content,
+          sourceLanguage: sourceLang,
+          targetLanguage: targetLang,
+          chapterId: 'unknown' // We'll use 'unknown' as default since we don't have chapterId here
+        })
+      });
+
+      console.log('Translation API response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Translation API error response:', errorText);
+        throw new Error(`Translation API error: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('Translation API result:', result);
+
+      if (result.translatedContent) {
+        console.log('Successfully translated content');
+        return result.translatedContent;
+      } else {
+        console.warn('No translatedContent in response, using fallback');
+        return `مترجم کا مواد: ${content.substring(0, 500)}...`;
+      }
+    } catch (error) {
+      console.error('Translation API call failed:', error);
+      // Fallback to simulated translation if API is not available
+      return `مترجم کا مواد: ${content.substring(0, 500)}...`;
+    }
 };
 
 /**

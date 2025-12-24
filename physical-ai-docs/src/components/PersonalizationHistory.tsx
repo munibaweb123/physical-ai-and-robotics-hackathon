@@ -111,11 +111,11 @@ const PersonalizationHistory: React.FC<PersonalizationHistoryProps> = ({
       ) : (
         <div className="history-list">
           {history.map((item) => (
-            <div key={item.id} className="history-item">
+            <div key={item?.id || Math.random().toString()} className="history-item">
               <div className="item-header">
-                <h4>{item.chapterTitle}</h4>
-                <span className={`status-badge ${item.personalizationActive ? 'active' : 'inactive'}`}>
-                  {item.personalizationActive ? 'Active' : 'Inactive'}
+                <h4>{item?.chapterTitle || 'Unknown Chapter'}</h4>
+                <span className={`status-badge ${item?.personalizationActive ? 'active' : 'inactive'}`}>
+                  {item?.personalizationActive ? 'Active' : 'Inactive'}
                 </span>
               </div>
 
@@ -123,30 +123,30 @@ const PersonalizationHistory: React.FC<PersonalizationHistoryProps> = ({
                 <div className="metrics">
                   <div className="metric">
                     <span className="metric-label">Adaptations:</span>
-                    <span className="metric-value">{item.adaptationsCount}</span>
+                    <span className="metric-value">{item?.adaptationsCount || 0}</span>
                   </div>
                   <div className="metric">
                     <span className="metric-label">Relevance:</span>
-                    <span className="metric-value">{(item.relevanceScore * 100).toFixed(0)}%</span>
+                    <span className="metric-value">{item?.relevanceScore ? (item.relevanceScore * 100).toFixed(0) : '0'}%</span>
                   </div>
                   <div className="metric">
                     <span className="metric-label">Time:</span>
-                    <span className="metric-value">{Math.round(item.engagementMetrics.timeSpent / 60)} min</span>
+                    <span className="metric-value">{item?.engagementMetrics?.timeSpent ? Math.round(item.engagementMetrics.timeSpent / 60) : 0} min</span>
                   </div>
                   <div className="metric">
                     <span className="metric-label">Scroll:</span>
-                    <span className="metric-value">{(item.engagementMetrics.scrollDepth * 100).toFixed(0)}%</span>
+                    <span className="metric-value">{item?.engagementMetrics?.scrollDepth ? (item.engagementMetrics.scrollDepth * 100).toFixed(0) : '0'}%</span>
                   </div>
                 </div>
 
                 <div className="timestamps">
                   <div className="timestamp">
                     <span className="timestamp-label">Personalized:</span>
-                    <span className="timestamp-value">{formatDate(item.personalizedAt)}</span>
+                    <span className="timestamp-value">{formatDate(item?.personalizedAt || new Date().toISOString())}</span>
                   </div>
                   <div className="timestamp">
                     <span className="timestamp-label">Viewed:</span>
-                    <span className="timestamp-value">{formatDate(item.viewedAt)}</span>
+                    <span className="timestamp-value">{formatDate(item?.viewedAt || new Date().toISOString())}</span>
                   </div>
                 </div>
               </div>

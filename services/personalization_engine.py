@@ -184,9 +184,9 @@ class PersonalizationEngine:
         total_weight = 0.0
 
         # Content level matching (30% weight)
-        content_level = content.get('level', '').lower()
-        user_software_level = user_profile.get('softwareExperienceLevel', '').lower()
-        user_hardware_level = user_profile.get('hardwareExperienceLevel', '').lower()
+        content_level = (content.get('level') or '').lower()
+        user_software_level = (user_profile.get('softwareExperienceLevel') or '').lower()
+        user_hardware_level = (user_profile.get('hardwareExperienceLevel') or '').lower()
 
         if content_level and (content_level == user_software_level or content_level == user_hardware_level):
             score += 0.3

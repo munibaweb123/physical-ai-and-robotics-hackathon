@@ -1,3 +1,5 @@
+import { authBaseUrl, apiBaseUrl, authClient } from '../lib/auth-client';
+
 // Service functions for chapter personalization
 
 interface PersonalizationState {
@@ -78,14 +80,23 @@ export const toggleChapterPersonalization = async (
   error?: string;
 }> => {
   try {
-    // Get the auth token from the auth client
-    const token = (window as any).authClient?.$getTokens?.()?.accessToken;
+    // Get the session to retrieve the token
+    const { data: session } = await authClient.getSession();
+    console.log('Session data:', session);
+    const token = session?.session?.token || session?.session?.id || session?.user?.id;
 
     if (!token) {
+      console.error('No token found in session:', session);
       throw new Error('Authentication token not found');
     }
 
-    const response = await fetch(`/api/chapters/${chapterId}/personalize`, {
+    console.log('Using token:', token.substring(0, 20) + '...');
+    const url = `${apiBaseUrl}/api/chapters/${chapterId}/personalize`;
+    console.log('Calling URL:', url);
+    console.log('Chapter ID:', chapterId);
+    console.log('API Base URL:', apiBaseUrl);
+
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -97,12 +108,30 @@ export const toggleChapterPersonalization = async (
       })
     });
 
-    const data = await response.json();
+    console.log('Response status:', response.status);
+    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+    // Get the raw response text first to see what we're actually getting
+    const responseText = await response.text();
+    console.log('Raw response text:', responseText);
+
+    let data;
+    try {
+      data = JSON.parse(responseText);
+      console.log('Parsed response data:', data);
+    } catch (parseError) {
+      console.error('Failed to parse response as JSON:', parseError);
+      console.error('Response was:', responseText);
+      return {
+        success: false,
+        error: `Server returned invalid JSON (status ${response.status}). Response: ${responseText.substring(0, 200)}`
+      };
+    }
 
     if (!response.ok) {
       return {
         success: false,
-        error: data.error || 'Failed to toggle personalization'
+        error: data.error || data.detail || `Server returned ${response.status}: ${JSON.stringify(data)}`
       };
     }
 
@@ -130,14 +159,15 @@ export const getChapterPersonalizationState = async (
   chapterId: string
 ): Promise<PersonalizationState & { success: boolean; error?: string }> => {
   try {
-    // Get the auth token from the auth client
-    const token = (window as any).authClient?.$getTokens?.()?.accessToken;
+    // Get the session to retrieve the token
+    const { data: session } = await authClient.getSession();
+    const token = session?.session?.token || session?.session?.id || session?.user?.id;
 
     if (!token) {
       throw new Error('Authentication token not found');
     }
 
-    const response = await fetch(`/api/chapters/${chapterId}/personalize`, {
+    const response = await fetch(`${apiBaseUrl}/api/chapters/${chapterId}/personalize`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -192,14 +222,15 @@ export const getPersonalizedChapterContent = async (
   focusAreaOverride?: string
 ): Promise<ContentAdaptation & { success: boolean; error?: string }> => {
   try {
-    // Get the auth token from the auth client
-    const token = (window as any).authClient?.$getTokens?.()?.accessToken;
+    // Get the session to retrieve the token
+    const { data: session } = await authClient.getSession();
+    const token = session?.session?.token || session?.session?.id || session?.user?.id;
 
     if (!token) {
       throw new Error('Authentication token not found');
     }
 
-    let url = `/api/chapters/${chapterId}/content/personalized`;
+    let url = `${apiBaseUrl}/api/chapters/${chapterId}/content/personalized`;
     const params = new URLSearchParams();
 
     if (complexityOverride) {
@@ -259,14 +290,15 @@ export const updateUserPreferences = async (
   preferences: PersonalizationSettings
 ): Promise<{ success: boolean; message?: string; preferences?: PersonalizationSettings; error?: string }> => {
   try {
-    // Get the auth token from the auth client
-    const token = (window as any).authClient?.$getTokens?.()?.accessToken;
+    // Get the session to retrieve the token
+    const { data: session } = await authClient.getSession();
+    const token = session?.session?.token || session?.session?.id || session?.user?.id;
 
     if (!token) {
       throw new Error('Authentication token not found');
     }
 
-    const response = await fetch('/api/user/personalization/preferences', {
+    const response = await fetch(`${apiBaseUrl}/api/user/personalization/preferences`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -303,14 +335,15 @@ export const updateUserPreferences = async (
  */
 export const getUserPreferences = async (): Promise<PersonalizationSettings & { success: boolean; error?: string }> => {
   try {
-    // Get the auth token from the auth client
-    const token = (window as any).authClient?.$getTokens?.()?.accessToken;
+    // Get the session to retrieve the token
+    const { data: session } = await authClient.getSession();
+    const token = session?.session?.token || session?.session?.id || session?.user?.id;
 
     if (!token) {
       throw new Error('Authentication token not found');
     }
 
-    const response = await fetch('/api/user/personalization/preferences', {
+    const response = await fetch(`${apiBaseUrl}/api/user/personalization/preferences`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -359,14 +392,15 @@ export const getPersonalizationHistory = async (
   endDate?: string
 ): Promise<{ history: PersonalizationHistory[], total: number, page: number, limit: number } & { success: boolean; error?: string }> => {
   try {
-    // Get the auth token from the auth client
-    const token = (window as any).authClient?.$getTokens?.()?.accessToken;
+    // Get the session to retrieve the token
+    const { data: session } = await authClient.getSession();
+    const token = session?.session?.token || session?.session?.id || session?.user?.id;
 
     if (!token) {
       throw new Error('Authentication token not found');
     }
 
-    let url = '/api/user/personalization/history';
+    let url = `${apiBaseUrl}/api/user/personalization/history`;
     const params = new URLSearchParams();
 
     params.append('limit', limit.toString());

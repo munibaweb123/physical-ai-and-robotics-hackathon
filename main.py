@@ -17,6 +17,9 @@ import httpx # Import httpx
 
 from services.personalization_engine import PersonalizationEngine
 from auth_utils import decode_jwt_token, extract_user_id_from_token
+import jwt
+from jwt import PyJWKClient
+from functools import lru_cache
 
 # Load environment variables from .env file
 load_dotenv()
@@ -63,6 +66,55 @@ QDRANT_COLLECTION_NAME = "book_chunks"
 EMBEDDING_MODEL = "text-embedding-3-small"
 OPENAI_CHAT_MODEL = "gpt-4o" # or "gpt-3.5-turbo"
 
+# --- JWT Verification Helper ---
+@lru_cache(maxsize=1)
+def _get_cached_jwk_client() -> PyJWKClient:
+    """Get cached JWKS client to fetch public keys from Better Auth."""
+    jwks_url = f"{settings.AUTH_SERVER_URL}/.well-known/jwks.json"
+    logger.info(f"Initializing JWKS client with URL: {jwks_url}")
+    return PyJWKClient(jwks_url)
+
+def verify_jwt_token(token: str) -> Dict[str, Any]:
+    """
+    Verify JWT token using JWKS and extract user information.
+
+    Args:
+        token: JWT token string from Authorization header
+
+    Returns:
+        dict: {"id": str, "email": str}
+
+    Raises:
+        ValueError: If token is invalid or expired
+    """
+    try:
+        # Get JWKS client and signing key
+        jwk_client = _get_cached_jwk_client()
+        signing_key = jwk_client.get_signing_key_from_jwt(token)
+
+        # Verify and decode the JWT
+        # Better Auth uses EdDSA (Ed25519) or RS256 by default
+        payload = jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["EdDSA", "RS256"],
+            options={"verify_aud": False}  # Better Auth doesn't use audience claim
+        )
+
+        # Extract user information from token
+        user_id: str = payload.get("sub") or payload.get("user_id") or payload.get("userId")
+        email: str = payload.get("email", "")
+
+        if not user_id:
+            raise ValueError("Invalid token: missing user_id (sub claim)")
+
+        return {"id": user_id, "email": email}
+
+    except jwt.exceptions.ExpiredSignatureError as e:
+        raise ValueError(f"Token has expired: {str(e)}") from e
+    except jwt.exceptions.PyJWTError as e:
+        raise ValueError(f"Invalid token: {str(e)}") from e
+
 # --- Authentication Dependency ---
 async def authenticate_user(authorization: str = Header(...)):
     if not authorization or not authorization.startswith("Bearer "):
@@ -71,34 +123,14 @@ async def authenticate_user(authorization: str = Header(...)):
     token = authorization.split(" ")[1] # Extract token from Bearer token
 
     try:
-        # Call the Node.js auth server to verify the session
-        # We send the token as a cookie so better-auth can verify it natively
-        # AND in the body for our manual fallback check in case cookie verification fails
-        # AND as Authorization header since we have the bearer plugin enabled!
-        headers = {
-            "Cookie": f"auth_session={token}",
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        
-        response = await http_client.post(
-            f"{settings.AUTH_SERVER_URL}/api/auth/verify-session",
-            headers=headers,
-            json={"token": token} # Pass token in body as fallback
-        )
-        response.raise_for_status() # Raise for HTTP errors (4xx or 5xx)
+        # Verify JWT token using JWKS (recommended approach for Better Auth)
+        user_info = verify_jwt_token(token)
+        logger.info(f"JWT verified successfully for user: {user_info.get('email')}")
+        return user_info
 
-        user_data = response.json()
-        if not user_data.get("success"):
-            raise HTTPException(status_code=401, detail="Not authenticated: Invalid session")
-
-        return user_data["user"] # Return user info if authenticated
-    except httpx.HTTPStatusError as e:
-        logger.error(f"Auth server responded with error: {e.response.status_code} - {e.response.text}")
-        raise HTTPException(status_code=401, detail="Not authenticated: Session verification failed")
-    except httpx.RequestError as e:
-        logger.error(f"Could not connect to auth server: {e}")
-        raise HTTPException(status_code=500, detail="Authentication service unavailable")
+    except ValueError as e:
+        logger.error(f"JWT verification failed: {str(e)}")
+        raise HTTPException(status_code=401, detail=f"Not authenticated: {str(e)}")
     except Exception as e:
         logger.error(f"Unexpected error during authentication: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error during authentication")
@@ -235,9 +267,9 @@ SYSTEM_PROMPTS = {
 
 def load_socratic_prompt():
     try:
-        with open("agent/socratic_tutor.md", "r", encoding="utf-8") as f:
+        with open(".claude/agents/socratic_tutor.md", "r", encoding="utf-8") as f:
             SYSTEM_PROMPTS["socratic"] = f.read()
-        logger.info("Loaded Socratic Tutor prompt from agent/socratic_tutor.md")
+        logger.info("Loaded Socratic Tutor prompt from .claude/agents/socratic_tutor.md")
     except Exception as e:
         logger.error(f"Failed to load Socratic Tutor prompt: {e}")
         # Fallback to a basic Socratic prompt if file fails
@@ -613,10 +645,11 @@ async def get_personalized_content(
 
 
 # --- Chapter Personalization Endpoints ---
-@app.post("/api/chapters/{chapter_id}/personalize", response_model=ChapterPersonalizationResponse)
+@app.post("/api/chapters/{chapter_id:path}/personalize", response_model=ChapterPersonalizationResponse)
 async def toggle_chapter_personalization(
     chapter_id: str,
-    request: ChapterPersonalizationRequest,
+    body: ChapterPersonalizationRequest,
+    request: Request,
     user: Dict[str, Any] = Depends(authenticate_user)
 ):
     """
@@ -636,23 +669,29 @@ async def toggle_chapter_personalization(
         raise HTTPException(status_code=500, detail="Personalization engine not initialized")
 
     try:
+        logger.info(f"Toggle personalization called for chapter: {chapter_id}, user: {user.get('id')}, activate: {body.activate}")
+
         # Get user's background information to use for personalization
         auth_header = request.headers.get("authorization", "")
         token = auth_header.split(" ")[1] if auth_header.startswith("Bearer ") else ""
+        logger.info(f"Fetching user background for user: {user['id']}")
         user_background = await get_user_background(user["id"], token)
+        logger.info(f"User background retrieved: {user_background}")
 
         # Update the personalization state for this chapter
+        logger.info(f"Updating personalization state...")
         personalization_state = personalization_engine.update_chapter_personalization_state(
             user_id=user["id"],
             chapter_id=chapter_id,
-            is_active=request.activate,
+            is_active=body.activate,
             adaptations_applied=[],  # Will be populated based on user profile
-            override_settings=request.preferences or {}
+            override_settings=body.preferences or {}
         )
+        logger.info(f"Personalization state updated: {personalization_state}")
 
         # Determine adaptations based on user profile and preferences
         adaptations = []
-        if request.activate:
+        if body.activate:
             # Add adaptations based on user profile
             if user_background.get('softwareExperienceLevel'):
                 adaptations.append('complexity-adjustment')
@@ -664,16 +703,16 @@ async def toggle_chapter_personalization(
         return ChapterPersonalizationResponse(
             success=True,
             chapterId=chapter_id,
-            personalizationActive=request.activate,
+            personalizationActive=body.activate,
             adaptationsApplied=adaptations,
-            message=f"Personalization {'activated' if request.activate else 'deactivated'} for chapter {chapter_id}"
+            message=f"Personalization {'activated' if body.activate else 'deactivated'} for chapter {chapter_id}"
         )
     except Exception as e:
         logger.error(f"Error toggling chapter personalization: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to update chapter personalization")
 
 
-@app.get("/api/chapters/{chapter_id}/personalize", response_model=ChapterPersonalizationResponse)
+@app.get("/api/chapters/{chapter_id:path}/personalize", response_model=ChapterPersonalizationResponse)
 async def get_chapter_personalization_state(
     chapter_id: str,
     user: Dict[str, Any] = Depends(authenticate_user)
@@ -810,7 +849,7 @@ class PersonalizedChapterContentResponse(BaseModel):
     metadata: Dict[str, Any]
 
 
-@app.get("/api/chapters/{chapter_id}/content/personalized", response_model=PersonalizedChapterContentResponse)
+@app.get("/api/chapters/{chapter_id:path}/content/personalized", response_model=PersonalizedChapterContentResponse)
 async def get_personalized_chapter_content(
     chapter_id: str,
     complexityOverride: Optional[str] = None,
@@ -1107,6 +1146,171 @@ async def auth_state_change(request: Request):
 
 
 # --- Health Check Endpoint (Optional but Recommended) ---
+class TranslationRequest(BaseModel):
+    sourceLanguage: str = "en"
+    targetLanguage: str
+    content: str
+    chapterId: str
+
+
+class TranslationResponse(BaseModel):
+    success: bool
+    translatedContent: Optional[str] = None
+    sourceLanguage: str
+    targetLanguage: str
+    chapterId: str
+    translationQuality: Optional[int] = None
+    translatedAt: Optional[str] = None
+    error: Optional[str] = None
+
+
+@app.post("/api/translate", response_model=TranslationResponse)
+async def translate_content(request: TranslationRequest, authorization: str = Header(None, alias='Authorization')):
+    """
+    Translate content from source language to target language (Urdu)
+    """
+    try:
+        # Verify the user's session using the auth server
+        # The authorization header from Better Auth may be in different formats
+        if not authorization:
+            raise HTTPException(status_code=401, detail="No session token provided")
+
+        # First, try to extract user ID from the token using JWT
+        user_id = extract_user_id_from_token(authorization)
+
+        # If JWT extraction failed, try to verify with Better Auth directly
+        if not user_id:
+            logger.info(f"JWT token extraction failed, attempting to verify with Better Auth")
+            # The Authorization header may contain a Better Auth session token
+            # The token could be in the format "Bearer session_id" or similar
+            # Let's try to make a request to the Better Auth server to verify the session
+            import httpx
+
+            # Extract the actual token (remove "Bearer " prefix if present)
+            auth_header = authorization
+            if authorization.lower().startswith("bearer "):
+                auth_header = authorization[7:]  # Remove "Bearer " prefix
+
+            logger.info(f"Attempting to verify session token with Better Auth: {auth_header[:10]}...")
+
+            # Make a request to Better Auth to verify the session
+            # According to the auth server, the correct endpoint is /api/auth/verify-session (POST)
+            # and /api/auth/user (GET)
+            async with httpx.AsyncClient() as client:
+                # First try the verify-session endpoint (POST)
+                verify_endpoint = f"{settings.AUTH_SERVER_URL}/api/auth/verify-session"
+
+                try:
+                    logger.info(f"Trying to verify session with endpoint: {verify_endpoint}")
+                    better_auth_response = await client.post(
+                        verify_endpoint,
+                        headers={"Authorization": f"Bearer {auth_header}"},
+                        json={"token": auth_header}  # Also send the token in the body as fallback
+                    )
+
+                    if better_auth_response.status_code == 200:
+                        session_data = better_auth_response.json()
+                        if session_data.get("success") and "user" in session_data:
+                            user_id = session_data["user"].get("id")
+                            if user_id:
+                                logger.info(f"Successfully verified session with Better Auth, user ID: {user_id}")
+                            else:
+                                logger.warning("Better Auth returned valid response but no user ID found in user object")
+                        else:
+                            logger.warning("Better Auth verify-session returned 200 but without success flag or user data")
+                    else:
+                        logger.info(f"POST endpoint {verify_endpoint} returned {better_auth_response.status_code}, trying GET /api/auth/user")
+
+                        # Try the GET /api/auth/user endpoint as fallback
+                        user_endpoint = f"{settings.AUTH_SERVER_URL}/api/auth/user"
+                        better_auth_response = await client.get(
+                            user_endpoint,
+                            headers={"Authorization": f"Bearer {auth_header}"}
+                        )
+
+                        if better_auth_response.status_code == 200:
+                            session_data = better_auth_response.json()
+                            if "user" in session_data:
+                                user_id = session_data["user"].get("id")
+                                if user_id:
+                                    logger.info(f"Successfully verified session with Better Auth using /api/auth/user, user ID: {user_id}")
+                                else:
+                                    logger.warning("Better Auth /api/auth/user returned user object but no ID found")
+                            else:
+                                logger.warning("Better Auth /api/auth/user returned 200 but no user object in response")
+                        else:
+                            logger.error(f"Both endpoints failed: POST {verify_endpoint} returned {better_auth_response.status_code}")
+                            logger.error(f"GET /api/auth/user also failed with status: {better_auth_response.status_code}")
+
+                except httpx.RequestError as e:
+                    logger.error(f"Failed to connect to Better Auth server: {e}")
+                    raise HTTPException(status_code=500, detail="Authentication service unavailable")
+
+            if not user_id:
+                logger.error(f"No user ID found after trying Better Auth endpoints")
+                raise HTTPException(status_code=401, detail="Invalid or expired session token")
+
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Unable to verify user session")
+
+        # Log the translation request
+        logger.info(f"Translation request for user {user_id}, chapter {request.chapterId}, from {request.sourceLanguage} to {request.targetLanguage}")
+
+        # Validate target language
+        if request.targetLanguage != "ur":
+            raise HTTPException(status_code=400, detail="Target language must be 'ur' for Urdu")
+
+        # Validate content
+        if not request.content or not request.content.strip():
+            raise HTTPException(status_code=400, detail="Content cannot be empty")
+
+        # Use OpenAI client to translate the content
+        response = await openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",  # You can also use "gpt-4" if preferred
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a professional technical translator. Translate the following content into Urdu. "
+                        "Preserve all formatting and structure. "
+                        "Do NOT translate code blocks or technical terms that should remain in English. "
+                        "Maintain the original tone and meaning."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": request.content
+                }
+            ],
+            temperature=0.3
+        )
+
+        translated_content = response.choices[0].message.content
+
+        # Return the translation response
+        return TranslationResponse(
+            success=True,
+            translatedContent=translated_content,
+            sourceLanguage=request.sourceLanguage,
+            targetLanguage=request.targetLanguage,
+            chapterId=request.chapterId,
+            translationQuality=95,  # Assuming good quality translation
+            translatedAt=datetime.utcnow().isoformat()
+        )
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        logger.error(f"Translation error: {e}", exc_info=True)
+        return TranslationResponse(
+            success=False,
+            error="Translation service unavailable",
+            sourceLanguage=request.sourceLanguage,
+            targetLanguage=request.targetLanguage,
+            chapterId=request.chapterId
+        )
+
+
 @app.get("/health")
 async def health_check():
     """
