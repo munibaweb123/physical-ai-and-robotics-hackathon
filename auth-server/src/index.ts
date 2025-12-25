@@ -256,10 +256,34 @@ app.post('/api/auth/verify-session', async (c) => {
 
 // JWKS endpoint for the Python backend to verify JWT tokens
 app.get('/api/auth/jwks', async (c) => {
-    // For HS512 algorithm, we return an empty keys array since the secret is shared
-    // The Python backend will use the same BETTER_AUTH_SECRET to verify tokens
+    // For HS256/HS512 with shared secret, we return the symmetric key
+    const secret = process.env.BETTER_AUTH_SECRET || 'super-secret-key-please-change-me-in-production';
+
+    // Create base64url-encoded representation of the secret
+    const encoder = new TextEncoder();
+    const secretBuffer = encoder.encode(secret);
+
+    // Convert to base64
+    let binaryString = '';
+    for (let i = 0; i < secretBuffer.length; i++) {
+        binaryString += String.fromCharCode(secretBuffer[i]);
+    }
+    const secretBase64 = btoa(binaryString);
+    const secretBase64Url = secretBase64
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=/g, '');
+
     return c.json({
-        keys: []
+        keys: [
+            {
+                kty: "oct",  // Octet sequence (symmetric key)
+                use: "sig",  // Used for signature
+                alg: "HS512", // Algorithm (matches JWT configuration)
+                kid: "default-key-id", // Key ID
+                k: secretBase64Url // The encoded secret key
+            }
+        ]
     });
 });
 

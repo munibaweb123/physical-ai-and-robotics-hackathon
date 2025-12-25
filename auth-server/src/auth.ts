@@ -41,9 +41,13 @@ export const auth = betterAuth({
         enabled: true,
     },
     plugins: [
-        bearer()
-        // Note: JWT plugin is not used here to avoid schema conflicts
-        // JWT functionality is handled separately for backend verification
+        bearer(),
+        jwt({
+            // Configure JWT options
+            secret: process.env.BETTER_AUTH_SECRET || 'super-secret-key-please-change-me-in-production',
+            expiresIn: '7d', // Token expiration
+            algorithm: 'HS512', // Use HS512 algorithm for consistency
+        })
     ],
     // Trust the frontend origin (your Vercel app)
     trustedOrigins: [FRONTEND_URL],
