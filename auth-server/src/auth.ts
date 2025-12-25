@@ -1,6 +1,5 @@
 import { betterAuth } from 'better-auth';
 import { bearer } from "better-auth/plugins";
-import { jwt } from "better-auth/plugins";
 import { config } from 'dotenv';
 
 // Import Drizzle adapter for Better Auth
@@ -42,12 +41,8 @@ export const auth = betterAuth({
     },
     plugins: [
         bearer(),
-        jwt({
-            // Configure JWT options
-            secret: process.env.BETTER_AUTH_SECRET || 'super-secret-key-please-change-me-in-production',
-            expiresIn: '7d', // Token expiration
-            algorithm: 'HS512', // Use HS512 algorithm for consistency
-        })
+        // Removed JWT plugin - we'll handle EdDSA tokens manually for Python backend
+        // Better Auth will use session-based auth for frontend
     ],
     // Trust the frontend origin (your Vercel app)
     trustedOrigins: [FRONTEND_URL],

@@ -782,7 +782,7 @@ class PersonalizationEngine:
         }
 
         # Cache the result
-        cache_key = f"personalization_state:{user_id}:{chapter_id}"
+        cache_key = f"chapter_personalization_state:{user_id}:{chapter_id}"
         self._cache[cache_key] = (state, time.time())
 
         return state
