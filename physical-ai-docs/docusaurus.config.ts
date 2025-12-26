@@ -74,8 +74,8 @@ const config: Config = {
   },
 
   customFields: {
-    apiBaseUrl: process.env.NEXT_PUBLIC_API_URL,
-    authBaseUrl: process.env.DOCUSAURUS_BETTER_AUTH_URL || 'http://localhost:10000',
+    apiBaseUrl: process.env.NEXT_PUBLIC_API_URL || 'https://physical-ai-and-robotics-hackathon-1.onrender.com',
+    authBaseUrl: process.env.DOCUSAURUS_BETTER_AUTH_URL || 'https://physical-ai-and-robotics-hackathon.onrender.com',
   },
 
   plugins: [
