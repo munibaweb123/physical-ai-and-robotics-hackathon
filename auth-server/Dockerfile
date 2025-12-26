@@ -1,24 +1,25 @@
-# 1. Use Node 20 (Required by your packages)
+# Use Node 20 (Required by your packages)
 FROM node:20-alpine
 
-# 2. Set working directory
+# Set working directory
 WORKDIR /app
 
-# 3. Install build tools required for better-sqlite3
-# (Python, Make, and G++ are needed to compile the database driver)
-RUN apk add --no-cache python3 make g++
-
-# 4. Copy package files first (better for caching)
+# Copy package files first (better for caching)
 COPY package*.json ./
 
-# 5. Install dependencies
-RUN npm install
+# Install dependencies
+# Using --production flag for smaller image (only install production deps)
+RUN npm ci --only=production
 
-# 6. Copy the rest of your source code
+# Copy the rest of your source code
 COPY . .
 
-# 7. Expose the port for Hugging Face Spaces
-EXPOSE 7860
+# Expose port (Render will use PORT env var, this is just documentation)
+# The actual port is set via environment variable PORT
+EXPOSE 10000
 
-# 8. Start the application
+# Set NODE_ENV to production
+ENV NODE_ENV=production
+
+# Start the application
 CMD ["npm", "start"]
