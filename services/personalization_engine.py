@@ -6,6 +6,7 @@ import hashlib
 import json
 import time
 from datetime import datetime
+from openai import AsyncOpenAI
 
 
 class ExperienceLevel(Enum):
@@ -130,8 +131,9 @@ class PersonalizationEngine:
     Engine to personalize content based on user's background information.
     """
 
-    def __init__(self):
+    def __init__(self, openai_client: Optional[AsyncOpenAI] = None):
         self.logger = logging.getLogger(__name__)
+        self.openai_client = openai_client
         # Simple in-memory cache
         self._cache = {}
         self._cache_ttl = 300  # 5 minutes in seconds
@@ -782,7 +784,7 @@ class PersonalizationEngine:
         }
 
         # Cache the result
-        cache_key = f"personalization_state:{user_id}:{chapter_id}"
+        cache_key = f"chapter_personalization_state:{user_id}:{chapter_id}"
         self._cache[cache_key] = (state, time.time())
 
         return state
@@ -818,7 +820,7 @@ class PersonalizationEngine:
 
         return updated_state
 
-    def adapt_content_for_chapter(self, content: str, user_profile: Dict[str, Any],
+    async def adapt_content_for_chapter(self, content: str, user_profile: Dict[str, Any],
                                  chapter_id: str = None, override_settings: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Adapt content specifically for a chapter based on user profile and optional overrides.
@@ -867,25 +869,40 @@ class PersonalizationEngine:
         adapted_content = content
         adaptations_applied = []
 
-        # Example adaptations - in a real implementation, these would be more sophisticated
-        if complexity_level == 'beginner':
-            # Simplify complex concepts
-            adapted_content = self._simplify_content(adapted_content)
-            adaptations_applied.append('simplified-explanation')
-        elif complexity_level == 'advanced':
-            # Add more depth to explanations
-            adapted_content = self._enhance_content(adapted_content)
-            adaptations_applied.append('enhanced-explanation')
+        # Use AI-powered adaptation if OpenAI client is available
+        if self.openai_client:
+            self.logger.info(f"🤖 Using AI-powered content adaptation")
+            try:
+                # Use AI to adapt the content
+                adapted_content, adaptations_applied = await self._ai_adapt_content(
+                    content, user_profile, complexity_level, focus_areas
+                )
+            except Exception as e:
+                self.logger.error(f"AI adaptation failed, using fallback: {e}")
+                # Fallback to simple adaptations
+                if complexity_level == 'beginner':
+                    adapted_content = self._simplify_content(adapted_content)
+                    adaptations_applied.append('simplified-explanation')
+                elif complexity_level == 'advanced':
+                    adapted_content = self._enhance_content(adapted_content)
+                    adaptations_applied.append('enhanced-explanation')
+        else:
+            # Fallback to simple rule-based adaptations
+            self.logger.info(f"⚠️ No OpenAI client, using basic adaptations")
+            if complexity_level == 'beginner':
+                adapted_content = self._simplify_content(adapted_content)
+                adaptations_applied.append('simplified-explanation')
+            elif complexity_level == 'advanced':
+                adapted_content = self._enhance_content(adapted_content)
+                adaptations_applied.append('enhanced-explanation')
 
-        # Apply example substitution based on user's technical skills
-        if preferred_examples:
-            adapted_content = self._substitute_examples(adapted_content, preferred_examples)
-            adaptations_applied.append('example-substitution')
+            if preferred_examples:
+                adapted_content = self._substitute_examples(adapted_content, preferred_examples)
+                adaptations_applied.append('example-substitution')
 
-        # Apply focus area adjustments
-        if focus_areas:
-            adapted_content = self._adjust_focus(adapted_content, focus_areas)
-            adaptations_applied.append('focus-adjustment')
+            if focus_areas:
+                adapted_content = self._adjust_focus(adapted_content, focus_areas)
+                adaptations_applied.append('focus-adjustment')
 
         return {
             'originalContent': content,
@@ -898,6 +915,158 @@ class PersonalizationEngine:
                 'focusAreas': focus_areas
             }
         }
+
+    async def _ai_adapt_content(self, content: str, user_profile: Dict[str, Any],
+                                complexity_level: str, focus_areas: List[str]) -> Tuple[str, List[str]]:
+        """
+        Use OpenAI to intelligently adapt content based on user profile.
+
+        Args:
+            content: Original markdown content
+            user_profile: User's profile information
+            complexity_level: Target complexity level (beginner, intermediate, advanced, expert)
+            focus_areas: Areas the user wants to focus on
+
+        Returns:
+            Tuple of (adapted_content, list_of_adaptations_applied)
+        """
+        if not self.openai_client:
+            self.logger.warning("OpenAI client not available, returning original content")
+            return content, []
+
+        try:
+            # Build the adaptation prompt
+            adaptation_instructions = self._build_adaptation_prompt(
+                complexity_level,
+                focus_areas,
+                user_profile
+            )
+
+            self.logger.info(f"🤖 Requesting AI adaptation for {complexity_level} level user with Gemini API")
+
+            # Call Gemini API (via OpenAI-compatible client) to adapt the content
+            response = await self.openai_client.chat.completions.create(
+                model="gemini-2.5-flash",  # Gemini model - 2025 stable version
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert educational content adapter. Your job is to rewrite technical documentation to match the reader's experience level and learning preferences while preserving all important information and maintaining markdown formatting."
+                    },
+                    {
+                        "role": "user",
+                        "content": f"""{adaptation_instructions}
+
+ORIGINAL CONTENT (in markdown):
+{content}
+
+Please provide the adapted content in markdown format, maintaining all headings, code blocks, and structure."""
+                    }
+                ],
+                temperature=0.7,
+                max_tokens=4000
+            )
+
+            adapted_content = response.choices[0].message.content
+
+            # Determine what adaptations were applied
+            adaptations_applied = []
+            if complexity_level == 'beginner':
+                adaptations_applied.extend(['simplified-explanations', 'added-context'])
+            elif complexity_level == 'advanced':
+                adaptations_applied.extend(['enhanced-depth', 'technical-details'])
+            elif complexity_level == 'expert':
+                adaptations_applied.extend(['expert-insights', 'advanced-concepts'])
+
+            if focus_areas:
+                adaptations_applied.append('focus-adjusted')
+
+            self.logger.info(f"✅ AI adaptation complete: {len(adapted_content)} chars, adaptations: {adaptations_applied}")
+
+            return adapted_content, adaptations_applied
+
+        except Exception as e:
+            self.logger.error(f"❌ AI adaptation failed: {e}", exc_info=True)
+            return content, []
+
+    def _build_adaptation_prompt(self, complexity_level: str, focus_areas: List[str],
+                                 user_profile: Dict[str, Any]) -> str:
+        """
+        Build a detailed prompt for content adaptation based on user profile.
+        """
+        prompt_parts = []
+
+        # Complexity level instructions
+        if complexity_level == 'beginner':
+            prompt_parts.append("""
+TARGET AUDIENCE: Beginners with little to no experience in this topic.
+
+ADAPTATION GUIDELINES:
+- Simplify technical jargon and explain complex terms
+- Add context and background information
+- Include more detailed explanations of concepts
+- Use analogies and real-world examples
+- Break down complex ideas into smaller steps
+- Add "What this means" clarifications for technical concepts
+""")
+        elif complexity_level == 'intermediate':
+            prompt_parts.append("""
+TARGET AUDIENCE: Intermediate learners with some foundational knowledge.
+
+ADAPTATION GUIDELINES:
+- Balance technical accuracy with clarity
+- Assume basic familiarity with common concepts
+- Focus on practical applications
+- Include relevant examples
+- Highlight best practices and common pitfalls
+""")
+        elif complexity_level == 'advanced':
+            prompt_parts.append("""
+TARGET AUDIENCE: Advanced practitioners with solid experience.
+
+ADAPTATION GUIDELINES:
+- Use precise technical terminology
+- Add deeper technical insights
+- Include performance considerations and optimization tips
+- Reference advanced patterns and architectures
+- Add notes about edge cases and advanced scenarios
+- Include references to related advanced topics
+""")
+        elif complexity_level == 'expert':
+            prompt_parts.append("""
+TARGET AUDIENCE: Expert-level professionals.
+
+ADAPTATION GUIDELINES:
+- Assume deep technical knowledge
+- Focus on cutting-edge techniques and research
+- Include architectural trade-offs and design decisions
+- Add insights about scalability and production concerns
+- Reference academic papers and advanced resources
+- Discuss limitations and future directions
+""")
+
+        # Focus areas
+        if focus_areas:
+            focus_str = ", ".join(focus_areas)
+            prompt_parts.append(f"""
+SPECIAL FOCUS AREAS: {focus_str}
+- Emphasize these topics throughout the content
+- Add extra examples and details related to these areas
+- Connect concepts back to these focus areas when relevant
+""")
+
+        # User background context
+        experience_level = user_profile.get('softwareExperienceLevel', 'intermediate')
+        skills = user_profile.get('technicalSkills', [])
+        if skills:
+            skills_str = ", ".join(skills[:5])  # Limit to top 5
+            prompt_parts.append(f"""
+USER BACKGROUND:
+- Software experience: {experience_level}
+- Known skills: {skills_str}
+- Leverage their existing knowledge in these areas when explaining new concepts
+""")
+
+        return "\n".join(prompt_parts)
 
     def _simplify_content(self, content: str) -> str:
         """

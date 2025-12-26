@@ -1,4 +1,5 @@
 import { authBaseUrl, apiBaseUrl, authClient } from '../lib/auth-client';
+import { getEddsaToken } from '../lib/token-utils';
 
 // Service functions for chapter personalization
 
@@ -80,17 +81,15 @@ export const toggleChapterPersonalization = async (
   error?: string;
 }> => {
   try {
-    // Get the session to retrieve the token
-    const { data: session } = await authClient.getSession();
-    console.log('Session data:', session);
-    const token = session?.session?.token || session?.session?.id || session?.user?.id;
+    // Get EdDSA token for authentication
+    const token = await getEddsaToken();
 
     if (!token) {
-      console.error('No token found in session:', session);
-      throw new Error('Authentication token not found');
+      console.error('Failed to get EdDSA token');
+      throw new Error('Authentication required - please log in');
     }
 
-    console.log('Using token:', token.substring(0, 20) + '...');
+    console.log('✓ Using EdDSA token for personalization request');
     const url = `${apiBaseUrl}/api/chapters/${chapterId}/personalize`;
     console.log('Calling URL:', url);
     console.log('Chapter ID:', chapterId);
@@ -159,12 +158,11 @@ export const getChapterPersonalizationState = async (
   chapterId: string
 ): Promise<PersonalizationState & { success: boolean; error?: string }> => {
   try {
-    // Get the session to retrieve the token
-    const { data: session } = await authClient.getSession();
-    const token = session?.session?.token || session?.session?.id || session?.user?.id;
+    // Get EdDSA token for authentication
+    const token = await getEddsaToken();
 
     if (!token) {
-      throw new Error('Authentication token not found');
+      throw new Error('Authentication required - please log in');
     }
 
     const response = await fetch(`${apiBaseUrl}/api/chapters/${chapterId}/personalize`, {
@@ -222,12 +220,11 @@ export const getPersonalizedChapterContent = async (
   focusAreaOverride?: string
 ): Promise<ContentAdaptation & { success: boolean; error?: string }> => {
   try {
-    // Get the session to retrieve the token
-    const { data: session } = await authClient.getSession();
-    const token = session?.session?.token || session?.session?.id || session?.user?.id;
+    // Get EdDSA token for authentication
+    const token = await getEddsaToken();
 
     if (!token) {
-      throw new Error('Authentication token not found');
+      throw new Error('Authentication required - please log in');
     }
 
     let url = `${apiBaseUrl}/api/chapters/${chapterId}/content/personalized`;
@@ -290,12 +287,11 @@ export const updateUserPreferences = async (
   preferences: PersonalizationSettings
 ): Promise<{ success: boolean; message?: string; preferences?: PersonalizationSettings; error?: string }> => {
   try {
-    // Get the session to retrieve the token
-    const { data: session } = await authClient.getSession();
-    const token = session?.session?.token || session?.session?.id || session?.user?.id;
+    // Get EdDSA token for authentication
+    const token = await getEddsaToken();
 
     if (!token) {
-      throw new Error('Authentication token not found');
+      throw new Error('Authentication required - please log in');
     }
 
     const response = await fetch(`${apiBaseUrl}/api/user/personalization/preferences`, {
@@ -335,12 +331,11 @@ export const updateUserPreferences = async (
  */
 export const getUserPreferences = async (): Promise<PersonalizationSettings & { success: boolean; error?: string }> => {
   try {
-    // Get the session to retrieve the token
-    const { data: session } = await authClient.getSession();
-    const token = session?.session?.token || session?.session?.id || session?.user?.id;
+    // Get EdDSA token for authentication
+    const token = await getEddsaToken();
 
     if (!token) {
-      throw new Error('Authentication token not found');
+      throw new Error('Authentication required - please log in');
     }
 
     const response = await fetch(`${apiBaseUrl}/api/user/personalization/preferences`, {
@@ -392,12 +387,11 @@ export const getPersonalizationHistory = async (
   endDate?: string
 ): Promise<{ history: PersonalizationHistory[], total: number, page: number, limit: number } & { success: boolean; error?: string }> => {
   try {
-    // Get the session to retrieve the token
-    const { data: session } = await authClient.getSession();
-    const token = session?.session?.token || session?.session?.id || session?.user?.id;
+    // Get EdDSA token for authentication
+    const token = await getEddsaToken();
 
     if (!token) {
-      throw new Error('Authentication token not found');
+      throw new Error('Authentication required - please log in');
     }
 
     let url = `${apiBaseUrl}/api/user/personalization/history`;

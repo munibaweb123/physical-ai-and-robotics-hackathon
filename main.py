@@ -3,9 +3,16 @@ import asyncio
 import logging
 import uuid # Added import for UUID generation
 from typing import List, Optional, Dict, Any
+from pathlib import Path
+import glob
 
 from fastapi import FastAPI, HTTPException, Header, Depends, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.middleware.cors import CORSMiddleware
+
+# Initialize security scheme for JWT Bearer tokens
+security = HTTPBearer(auto_error=False)
+
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
@@ -14,9 +21,12 @@ from qdrant_client import AsyncQdrantClient, models
 
 from datetime import datetime
 import httpx # Import httpx
+import markdown
+from markdown.extensions.fenced_code import FencedCodeExtension
+from markdown.extensions.tables import TableExtension
+from markdown.extensions.codehilite import CodeHiliteExtension
 
 from services.personalization_engine import PersonalizationEngine
-from auth_utils import decode_jwt_token, extract_user_id_from_token
 import jwt
 from jwt import PyJWKClient
 from functools import lru_cache
@@ -30,10 +40,11 @@ logger = logging.getLogger(__name__)
 
 # --- Pydantic Settings Model ---
 class Settings(BaseSettings):
-    OPENAI_API_KEY: str = Field(..., description="OpenAI API Key")
+    GEMINI_API_KEY: str = Field(..., description="Gemini API Key (used with OpenAI-compatible client)")
     QDRANT_URL: str = Field(..., description="Qdrant Cloud URL")
     QDRANT_API_KEY: str = Field(..., description="Qdrant API Key")
-    AUTH_SERVER_URL: str = Field("http://localhost:10000", description="URL of the Node.js auth server")
+    AUTH_SERVER_URL: str = Field(..., description="URL of the Node.js auth server")
+    BETTER_AUTH_SECRET: str = Field(..., description="Better Auth Secret for JWT verification")
 
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -50,90 +61,140 @@ app = FastAPI(
 # --- CORS Middleware ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["*"],  # More permissive for development
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Add exposed headers for auth
+    allow_origin_regex=r"https?://.*",
+    expose_headers=["Access-Control-Allow-Origin", "Authorization", "Content-Type"]
 )
 
 # --- Global Clients and Connection Pools ---
-openai_client: Optional[AsyncOpenAI] = None
+gemini_client: Optional[AsyncOpenAI] = None  # For both chat completions and embeddings using Gemini
 qdrant_client: Optional[AsyncQdrantClient] = None
 http_client: Optional[httpx.AsyncClient] = None # Add httpx client
 personalization_engine: Optional[PersonalizationEngine] = None
 
 QDRANT_COLLECTION_NAME = "book_chunks"
-EMBEDDING_MODEL = "text-embedding-3-small"
-OPENAI_CHAT_MODEL = "gpt-4o" # or "gpt-3.5-turbo"
+GEMINI_EMBEDDING_MODEL = "gemini-embedding-001"  # Gemini model for embeddings
+GEMINI_CHAT_MODEL = "gemini-2.5-flash"  # Gemini model for chat completions (2025 stable model)
 
-# --- JWT Verification Helper ---
-@lru_cache(maxsize=1)
-def _get_cached_jwk_client() -> PyJWKClient:
-    """Get cached JWKS client to fetch public keys from Better Auth."""
-    jwks_url = f"{settings.AUTH_SERVER_URL}/.well-known/jwks.json"
-    logger.info(f"Initializing JWKS client with URL: {jwks_url}")
-    return PyJWKClient(jwks_url)
-
-def verify_jwt_token(token: str) -> Dict[str, Any]:
-    """
-    Verify JWT token using JWKS and extract user information.
-
-    Args:
-        token: JWT token string from Authorization header
-
-    Returns:
-        dict: {"id": str, "email": str}
-
-    Raises:
-        ValueError: If token is invalid or expired
-    """
-    try:
-        # Get JWKS client and signing key
-        jwk_client = _get_cached_jwk_client()
-        signing_key = jwk_client.get_signing_key_from_jwt(token)
-
-        # Verify and decode the JWT
-        # Better Auth uses EdDSA (Ed25519) or RS256 by default
-        payload = jwt.decode(
-            token,
-            signing_key.key,
-            algorithms=["EdDSA", "RS256"],
-            options={"verify_aud": False}  # Better Auth doesn't use audience claim
-        )
-
-        # Extract user information from token
-        user_id: str = payload.get("sub") or payload.get("user_id") or payload.get("userId")
-        email: str = payload.get("email", "")
-
-        if not user_id:
-            raise ValueError("Invalid token: missing user_id (sub claim)")
-
-        return {"id": user_id, "email": email}
-
-    except jwt.exceptions.ExpiredSignatureError as e:
-        raise ValueError(f"Token has expired: {str(e)}") from e
-    except jwt.exceptions.PyJWTError as e:
-        raise ValueError(f"Invalid token: {str(e)}") from e
+# Import the new authentication system
+from auth.core import get_current_user, AuthenticatedUser
 
 # --- Authentication Dependency ---
-async def authenticate_user(authorization: str = Header(...)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Not authenticated: Missing or invalid Authorization header")
+async def authenticate_user(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
+    """
+    Authentication dependency that verifies JWT token and returns user info.
 
-    token = authorization.split(" ")[1] # Extract token from Bearer token
+    Args:
+        request: FastAPI request object
+        credentials: HTTP authorization credentials
 
+    Returns:
+        Dictionary containing user information
+    """
+    # Set the auth secret in request state for the auth system to use
+    request.state.auth_secret = settings.BETTER_AUTH_SECRET
+
+    # Get the current authenticated user
+    user = await get_current_user(request, credentials)
+
+    logger.info(f"JWT verified successfully for user: {user.email}")
+    return {"id": user.id, "email": user.email}
+
+
+def get_chapter_content_from_filesystem(chapter_id: str) -> Optional[str]:
+    """
+    Fetch actual chapter content from the Docusaurus documentation files.
+
+    Args:
+        chapter_id: The chapter identifier (e.g., "foundations/era-of-physical-ai")
+
+    Returns:
+        Markdown content of the chapter, or None if not found
+    """
     try:
-        # Verify JWT token using JWKS (recommended approach for Better Auth)
-        user_info = verify_jwt_token(token)
-        logger.info(f"JWT verified successfully for user: {user_info.get('email')}")
-        return user_info
+        # Base path to documentation files
+        docs_base = Path("physical-ai-docs/docs")
 
-    except ValueError as e:
-        logger.error(f"JWT verification failed: {str(e)}")
-        raise HTTPException(status_code=401, detail=f"Not authenticated: {str(e)}")
+        if not docs_base.exists():
+            logger.warning(f"Documentation directory not found: {docs_base}")
+            return None
+
+        # Clean the chapter_id and extract parts
+        parts = chapter_id.strip('/').split('/')
+
+        # Try to find the markdown file
+        # Pattern 1: Direct file match (e.g., foundations/era-of-physical-ai -> *foundations*/era-of-physical-ai.md)
+        # Pattern 2: Numbered folders (e.g., 01-foundations/01-era-of-physical-ai.md)
+
+        search_patterns = []
+
+        if len(parts) == 1:
+            # Single part (e.g., "intro")
+            search_patterns = [
+                f"{parts[0]}.md",
+                f"*{parts[0]}*.md",
+            ]
+        else:
+            # Multiple parts (e.g., "foundations/era-of-physical-ai")
+            folder = parts[0]
+            filename = parts[-1]
+            search_patterns = [
+                f"*{folder}*/*{filename}*.md",
+                f"{folder}/*{filename}*.md",
+                f"*{folder}*/{filename}.md",
+            ]
+
+        # Search for matching files
+        logger.info(f"🔍 Searching with patterns: {search_patterns}")
+        for pattern in search_patterns:
+            matches = list(docs_base.glob(pattern))
+            logger.info(f"  Pattern '{pattern}': {len(matches)} matches")
+            if matches:
+                # Use the first match
+                file_path = matches[0]
+                logger.info(f"✅ Found chapter file: {file_path}")
+
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+
+                # Strip frontmatter if present
+                if content.startswith('---'):
+                    parts = content.split('---', 2)
+                    if len(parts) >= 3:
+                        content = parts[2].strip()
+
+                return content
+
+        logger.warning(f"No matching file found for chapter_id: {chapter_id}")
+        return None
+
     except Exception as e:
-        logger.error(f"Unexpected error during authentication: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error during authentication")
+        logger.error(f"Error fetching chapter content: {e}", exc_info=True)
+        return None
+
+
+def markdown_to_html(markdown_content: str) -> str:
+    """
+    Convert markdown content to HTML with syntax highlighting and extensions.
+
+    Args:
+        markdown_content: Markdown text to convert
+
+    Returns:
+        HTML string
+    """
+    md = markdown.Markdown(extensions=[
+        'fenced_code',
+        'tables',
+        'codehilite',
+        'nl2br',
+        'sane_lists'
+    ])
+    return md.convert(markdown_content)
 
 
 async def get_user_background(user_id: str, auth_token: str) -> Dict[str, Any]:
@@ -286,20 +347,34 @@ async def startup_event():
     """
     Initialize clients and database connections on app startup.
     """
-    global openai_client, qdrant_client, http_client, personalization_engine
+    global gemini_client, qdrant_client, http_client, personalization_engine
 
     logger.info("Initializing application resources...")
 
     try:
-        openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        # Initialize Gemini client for both chat completions and embeddings (OpenAI-compatible endpoint)
+        gemini_client = AsyncOpenAI(
+            api_key=settings.GEMINI_API_KEY,
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+        )
+        logger.info("✅ Initialized Gemini API client for chat completions and embeddings")
         # Strip any whitespace/newlines from the QDRANT_API_KEY to prevent header validation errors
         qdrant_api_key = settings.QDRANT_API_KEY.strip() if settings.QDRANT_API_KEY else settings.QDRANT_API_KEY
         qdrant_client = AsyncQdrantClient(url=settings.QDRANT_URL, api_key=qdrant_api_key)
         http_client = httpx.AsyncClient() # Initialize httpx client
-        personalization_engine = PersonalizationEngine() # Initialize personalization engine
+        personalization_engine = PersonalizationEngine(openai_client=gemini_client) # Initialize with Gemini client
 
         # Load system prompts
         load_socratic_prompt()
+
+        # Fetch JWKS from Better Auth for JWT verification
+        logger.info("Fetching JWKS from Better Auth...")
+        from auth.jwks import fetch_jwks
+        jwks_result = await fetch_jwks(settings.AUTH_SERVER_URL)
+        if jwks_result:
+            logger.info(f"Successfully fetched JWKS with {len(jwks_result.get('keys', []))} keys")
+        else:
+            logger.warning("Failed to fetch JWKS - JWT verification may not work until JWKS is available")
 
         # Ensure Qdrant collection exists
         try:
@@ -344,16 +419,16 @@ async def shutdown_event():
 # --- RAG Helper Functions ---
 async def generate_embeddings(text: str) -> List[float]:
     """
-    Generates embeddings for the given text using OpenAI's embedding model.
+    Generates embeddings for the given text using Gemini's embedding model via OpenAI-compatible API.
     """
     try:
-        response = await openai_client.embeddings.create(
+        response = await gemini_client.embeddings.create(
             input=text,
-            model=EMBEDDING_MODEL
+            model=GEMINI_EMBEDDING_MODEL
         )
         return response.data[0].embedding
     except Exception as e:
-        logger.error(f"Error generating embeddings: {e}", exc_info=True)
+        logger.error(f"Error generating embeddings with Gemini: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to generate embeddings.")
 
 def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
@@ -533,13 +608,13 @@ async def chat_with_rag(request: ChatRequest, user: Dict[str, Any] = Depends(aut
     ]
 
     try:
-        chat_completion = await openai_client.chat.completions.create(
-            model=OPENAI_CHAT_MODEL,
+        chat_completion = await gemini_client.chat.completions.create(
+            model=GEMINI_CHAT_MODEL,
             messages=messages,
             temperature=0.0 # Keep responses factual
         )
         response_content = chat_completion.choices[0].message.content
-        logger.info(f"OpenAI chat completion successful for query: '{request.user_query}'")
+        logger.info(f"Gemini chat completion successful for query: '{request.user_query}'")
         return ChatResponse(response=response_content)
 
     except Exception as e:
@@ -887,28 +962,43 @@ async def get_personalized_chapter_content(
         if focusAreaOverride:
             user_prefs['focusAreas'] = [focusAreaOverride]  # Override focus areas with single value
 
-        # For now, we'll return placeholder content
-        # In a real implementation, this would fetch the actual chapter content and adapt it
-        placeholder_content = f"Personalized content for chapter {chapter_id} based on user preferences."
+        # Fetch actual chapter content from filesystem
+        logger.info(f"🔍 Fetching content for chapter: {chapter_id}")
+        chapter_markdown = get_chapter_content_from_filesystem(chapter_id)
+
+        if not chapter_markdown:
+            # Fallback to placeholder if file not found
+            logger.warning(f"❌ Chapter content not found for {chapter_id}, using placeholder")
+            chapter_markdown = f"# {chapter_id}\n\nContent for this chapter is not yet available."
+        else:
+            logger.info(f"✅ Chapter content loaded: {len(chapter_markdown)} chars, first 100: {chapter_markdown[:100]}")
+
+        logger.info(f"📝 Chapter content ready ({len(chapter_markdown)} chars)")
 
         # Adapt the content based on user profile and preferences
-        adapted_result = personalization_engine.adapt_content_for_chapter(
-            content=placeholder_content,
+        logger.info(f"🎨 Adapting content for user profile: {user_prefs.get('complexityLevel', 'unknown')}")
+        adapted_result = await personalization_engine.adapt_content_for_chapter(
+            content=chapter_markdown,
             user_profile=user_prefs,
             chapter_id=chapter_id,
             override_settings={}
         )
+        logger.info(f"✅ Adapted content: {len(adapted_result['adaptedContent'])} chars, first 100: {adapted_result['adaptedContent'][:100]}")
+
+        # Convert adapted markdown to HTML
+        adapted_html = markdown_to_html(adapted_result['adaptedContent'])
+        logger.info(f"🌐 HTML conversion complete: {len(adapted_html)} chars, first 150: {adapted_html[:150]}")
 
         return PersonalizedChapterContentResponse(
             chapterId=chapter_id,
             title=f"Chapter {chapter_id} - Personalized Content",
-            content=adapted_result['adaptedContent'],
+            content=adapted_html,
             adaptationsApplied=[
                 {
                     "type": adaptation,
                     "appliedRule": adaptation,
-                    "originalText": placeholder_content,
-                    "adaptedText": adapted_result['adaptedContent']
+                    "originalText": chapter_markdown[:200] + "...",  # First 200 chars
+                    "adaptedText": adapted_result['adaptedContent'][:200] + "..."
                 }
                 for adaptation in adapted_result['adaptationsApplied']
             ],
@@ -1167,90 +1257,13 @@ class TranslationResponse(BaseModel):
 
 
 @app.post("/api/translate", response_model=TranslationResponse)
-async def translate_content(request: TranslationRequest, authorization: str = Header(None, alias='Authorization')):
+async def translate_content(request: TranslationRequest, user: Dict[str, Any] = Depends(authenticate_user)):
     """
     Translate content from source language to target language (Urdu)
     """
     try:
-        # Verify the user's session using the auth server
-        # The authorization header from Better Auth may be in different formats
-        if not authorization:
-            raise HTTPException(status_code=401, detail="No session token provided")
-
-        # First, try to extract user ID from the token using JWT
-        user_id = extract_user_id_from_token(authorization)
-
-        # If JWT extraction failed, try to verify with Better Auth directly
-        if not user_id:
-            logger.info(f"JWT token extraction failed, attempting to verify with Better Auth")
-            # The Authorization header may contain a Better Auth session token
-            # The token could be in the format "Bearer session_id" or similar
-            # Let's try to make a request to the Better Auth server to verify the session
-            import httpx
-
-            # Extract the actual token (remove "Bearer " prefix if present)
-            auth_header = authorization
-            if authorization.lower().startswith("bearer "):
-                auth_header = authorization[7:]  # Remove "Bearer " prefix
-
-            logger.info(f"Attempting to verify session token with Better Auth: {auth_header[:10]}...")
-
-            # Make a request to Better Auth to verify the session
-            # According to the auth server, the correct endpoint is /api/auth/verify-session (POST)
-            # and /api/auth/user (GET)
-            async with httpx.AsyncClient() as client:
-                # First try the verify-session endpoint (POST)
-                verify_endpoint = f"{settings.AUTH_SERVER_URL}/api/auth/verify-session"
-
-                try:
-                    logger.info(f"Trying to verify session with endpoint: {verify_endpoint}")
-                    better_auth_response = await client.post(
-                        verify_endpoint,
-                        headers={"Authorization": f"Bearer {auth_header}"},
-                        json={"token": auth_header}  # Also send the token in the body as fallback
-                    )
-
-                    if better_auth_response.status_code == 200:
-                        session_data = better_auth_response.json()
-                        if session_data.get("success") and "user" in session_data:
-                            user_id = session_data["user"].get("id")
-                            if user_id:
-                                logger.info(f"Successfully verified session with Better Auth, user ID: {user_id}")
-                            else:
-                                logger.warning("Better Auth returned valid response but no user ID found in user object")
-                        else:
-                            logger.warning("Better Auth verify-session returned 200 but without success flag or user data")
-                    else:
-                        logger.info(f"POST endpoint {verify_endpoint} returned {better_auth_response.status_code}, trying GET /api/auth/user")
-
-                        # Try the GET /api/auth/user endpoint as fallback
-                        user_endpoint = f"{settings.AUTH_SERVER_URL}/api/auth/user"
-                        better_auth_response = await client.get(
-                            user_endpoint,
-                            headers={"Authorization": f"Bearer {auth_header}"}
-                        )
-
-                        if better_auth_response.status_code == 200:
-                            session_data = better_auth_response.json()
-                            if "user" in session_data:
-                                user_id = session_data["user"].get("id")
-                                if user_id:
-                                    logger.info(f"Successfully verified session with Better Auth using /api/auth/user, user ID: {user_id}")
-                                else:
-                                    logger.warning("Better Auth /api/auth/user returned user object but no ID found")
-                            else:
-                                logger.warning("Better Auth /api/auth/user returned 200 but no user object in response")
-                        else:
-                            logger.error(f"Both endpoints failed: POST {verify_endpoint} returned {better_auth_response.status_code}")
-                            logger.error(f"GET /api/auth/user also failed with status: {better_auth_response.status_code}")
-
-                except httpx.RequestError as e:
-                    logger.error(f"Failed to connect to Better Auth server: {e}")
-                    raise HTTPException(status_code=500, detail="Authentication service unavailable")
-
-            if not user_id:
-                logger.error(f"No user ID found after trying Better Auth endpoints")
-                raise HTTPException(status_code=401, detail="Invalid or expired session token")
+        # User is already authenticated via the dependency
+        user_id = user["id"]
 
         if not user_id:
             raise HTTPException(status_code=401, detail="Unable to verify user session")
@@ -1266,9 +1279,9 @@ async def translate_content(request: TranslationRequest, authorization: str = He
         if not request.content or not request.content.strip():
             raise HTTPException(status_code=400, detail="Content cannot be empty")
 
-        # Use OpenAI client to translate the content
-        response = await openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",  # You can also use "gpt-4" if preferred
+        # Use Gemini API client to translate the content
+        response = await gemini_client.chat.completions.create(
+            model=GEMINI_CHAT_MODEL,
             messages=[
                 {
                     "role": "system",
@@ -1312,6 +1325,81 @@ async def translate_content(request: TranslationRequest, authorization: str = He
             chapterId=request.chapterId
         )
 
+
+# Authentication endpoints to support frontend auth
+@app.get("/api/auth/session")
+async def get_session(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """
+    Get current user session - endpoint expected by Better Auth frontend
+    """
+    # Set auth secret in request state for consistency
+    request.state.auth_secret = settings.BETTER_AUTH_SECRET
+
+    if credentials and credentials.credentials:
+        try:
+            # Attempt to authenticate the user
+            user = await get_current_user(request, credentials)
+            return {
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "name": user.name or "",
+                    "image": ""
+                },
+                "session": {
+                    "accessToken": "",  # Frontend should have the token
+                    "expiresAt": None
+                },
+                "status": "authenticated"
+            }
+        except:
+            # Return unauthenticated if token is invalid
+            return {
+                "user": None,
+                "session": None,
+                "status": "unauthenticated"
+            }
+    else:
+        # No credentials provided
+        return {
+            "user": None,
+            "session": None,
+            "status": "unauthenticated"
+        }
+
+@app.post("/api/auth/signout")
+async def sign_out():
+    """
+    Sign out endpoint - endpoint expected by Better Auth frontend
+    """
+    return {"success": True, "message": "Signed out successfully"}
+
+# Additional endpoint that Better Auth might expect
+@app.get("/api/auth/user")
+async def get_user(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """
+    Get current user info - endpoint expected by Better Auth frontend
+    """
+    # Set auth secret in request state for consistency
+    request.state.auth_secret = settings.BETTER_AUTH_SECRET
+
+    if credentials and credentials.credentials:
+        try:
+            # Attempt to authenticate the user
+            user = await get_current_user(request, credentials)
+            return {
+                "id": user.id,
+                "email": user.email,
+                "name": user.name or "",
+                "emailVerified": True,
+                "image": ""
+            }
+        except:
+            # Return 401 if not authenticated
+            raise HTTPException(status_code=401, detail="Not authenticated")
+    else:
+        # Return 401 if no credentials provided
+        raise HTTPException(status_code=401, detail="Not authenticated")
 
 @app.get("/health")
 async def health_check():

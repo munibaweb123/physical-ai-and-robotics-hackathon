@@ -7,6 +7,78 @@ import { cors } from 'hono/cors';
 import { validateUserBackgroundInput, sanitizeUserBackgroundInput } from './validation';
 import { UserBackgroundResponse } from './types';
 import { migrateData } from './migrate'; // Import migration function
+import { loadOrGenerateKeys, getPublicKeyJWK } from './crypto-utils'; // Import crypto utilities
+import * as crypto from 'crypto';
+import * as jwt from 'jsonwebtoken';
+
+// Alternative: Create JWT manually using crypto module for EdDSA
+function createEdDSAToken(payload: any, privateKeyBase64Url: string): string {
+    try {
+        // Decode private key from base64url
+        const base64 = privateKeyBase64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const padding = '='.repeat((4 - (base64.length % 4)) % 4);
+        const derBuffer = Buffer.from(base64 + padding, 'base64');
+
+        // Create private key object from DER
+        const privateKey = crypto.createPrivateKey({
+            key: derBuffer,
+            format: 'der',
+            type: 'pkcs8'
+        });
+
+        // Create JWT header
+        const header = {
+            alg: 'EdDSA',
+            typ: 'JWT',
+            kid: 'better-auth-eddsa-key'
+        };
+
+        // Encode header and payload
+        const encodedHeader = Buffer.from(JSON.stringify(header)).toString('base64url');
+        const encodedPayload = Buffer.from(JSON.stringify(payload)).toString('base64url');
+
+        // Create signing input
+        const signingInput = `${encodedHeader}.${encodedPayload}`;
+
+        // Sign with Ed25519
+        const signature = crypto.sign(null, Buffer.from(signingInput), privateKey);
+
+        // Encode signature
+        const encodedSignature = signature.toString('base64url');
+
+        // Return complete JWT
+        return `${signingInput}.${encodedSignature}`;
+    } catch (error) {
+        console.error('Error creating EdDSA token manually:', error);
+        throw error;
+    }
+}
+
+// Load or generate EdDSA keys on startup
+const eddsaKeys = loadOrGenerateKeys();
+
+// Convert base64url EdDSA private key to PEM format for signing
+function getEdDSAPrivateKeyPEM(base64UrlKey: string): string {
+    try {
+        // Decode base64url to buffer
+        const base64 = base64UrlKey.replace(/-/g, '+').replace(/_/g, '/');
+        const padding = '='.repeat((4 - (base64.length % 4)) % 4);
+        const derBuffer = Buffer.from(base64 + padding, 'base64');
+
+        // Create PEM format with proper line breaks (64 chars per line)
+        const base64Der = derBuffer.toString('base64');
+        const lines: string[] = [];
+        for (let i = 0; i < base64Der.length; i += 64) {
+            lines.push(base64Der.slice(i, i + 64));
+        }
+
+        const pem = `-----BEGIN PRIVATE KEY-----\n${lines.join('\n')}\n-----END PRIVATE KEY-----`;
+        return pem;
+    } catch (error) {
+        console.error('Error converting EdDSA key to PEM:', error);
+        throw error;
+    }
+}
 
 const app = new Hono();
 
@@ -256,11 +328,94 @@ app.post('/api/auth/verify-session', async (c) => {
 
 // JWKS endpoint for the Python backend to verify JWT tokens
 app.get('/api/auth/jwks', async (c) => {
-    // For HS512 algorithm, we return an empty keys array since the secret is shared
-    // The Python backend will use the same BETTER_AUTH_SECRET to verify tokens
+    try {
+        // Return the public key in JWKS format for EdDSA verification
+        const publicKeyJWK = getPublicKeyJWK(eddsaKeys.publicKey);
+
+        console.log('📋 Serving JWKS with EdDSA public key');
+
+        return c.json({
+            keys: [publicKeyJWK]
+        });
+    } catch (error) {
+        console.error('Error in JWKS endpoint:', error);
+        return c.json({
+            error: 'Failed to retrieve JWKS',
+            details: String(error)
+        }, 500);
+    }
+});
+
+// Debug endpoint to test EdDSA key loading
+app.get('/api/auth/debug/keys', async (c) => {
     return c.json({
-        keys: []
+        publicKeyLength: eddsaKeys.publicKey.length,
+        privateKeyLength: eddsaKeys.privateKey.length,
+        publicKeyPreview: eddsaKeys.publicKey.substring(0, 20) + '...',
+        keysLoaded: !!eddsaKeys.publicKey && !!eddsaKeys.privateKey
     });
+});
+
+// Endpoint to get an EdDSA JWT token for the Python backend
+app.get('/api/auth/token/eddsa', async (c) => {
+    try {
+        console.log('📋 EdDSA token request received');
+
+        // Verify the user is authenticated via Better Auth session
+        const session = await auth.api.getSession({
+            headers: c.req.raw.headers
+        });
+
+        if (!session) {
+            console.log('❌ No session found for EdDSA token request');
+            return c.json({ error: 'Authentication required' }, 401);
+        }
+
+        console.log('✓ Session found for user:', session.user.email);
+
+        // Create EdDSA JWT token
+        console.log('🔑 Converting private key to PEM format...');
+        const privateKeyPEM = getEdDSAPrivateKeyPEM(eddsaKeys.privateKey);
+
+        console.log('📝 Creating JWT payload...');
+        const payload = {
+            sub: session.user.id,
+            email: session.user.email,
+            name: session.user.name,
+            iat: Math.floor(Date.now() / 1000),
+            exp: Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60) // 7 days
+        };
+
+        console.log('🔐 Signing JWT with EdDSA...');
+        // Try using native crypto first (more reliable for EdDSA)
+        let token: string;
+        try {
+            token = createEdDSAToken(payload, eddsaKeys.privateKey);
+            console.log('✓ Used native crypto for EdDSA signing');
+        } catch (nativeError) {
+            console.log('⚠ Native crypto failed, trying jsonwebtoken library:', nativeError);
+            token = jwt.sign(payload, privateKeyPEM, {
+                algorithm: 'EdDSA',
+                keyid: 'better-auth-eddsa-key'
+            });
+        }
+
+        console.log('✓ Generated EdDSA JWT token for user:', session.user.email);
+
+        return c.json({
+            token,
+            expiresIn: 7 * 24 * 60 * 60, // 7 days in seconds
+            tokenType: 'Bearer',
+            algorithm: 'EdDSA'
+        });
+    } catch (error) {
+        console.error('❌ Error generating EdDSA token:', error);
+        console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+        return c.json({
+            error: 'Failed to generate token',
+            details: error instanceof Error ? error.message : String(error)
+        }, 500);
+    }
 });
 
 // POST endpoint to update user background information
@@ -539,6 +694,19 @@ app.get('/api/auth/user', async (c) => {
     }
 
     return c.json({ user: session.user });
+});
+
+// Stub endpoint for Better Auth client onAuthStateChange
+// This is typically a client-side event, but the client may try to call this endpoint
+app.post('/api/auth/on-auth-state-change', async (c) => {
+    // This endpoint is for the Better Auth client to report state changes
+    // We'll just acknowledge the request
+    return c.json({ success: true, message: 'Auth state change received' });
+});
+
+app.get('/api/auth/on-auth-state-change', async (c) => {
+    // Some clients may try GET instead of POST
+    return c.json({ success: true, message: 'Auth state change listener ready' });
 });
 
 // Better Auth routes - This should be last to avoid intercepting custom endpoints

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, type ReactNode } from 'react';
 import { useAuth } from '../lib/AuthContext';
 import { getPersonalizedChapterContent, getChapterPersonalizationState } from '../services/personalization-service';
+import { getEddsaToken } from '../lib/token-utils';
 
 interface PersonalizedChapterContentProps {
   chapterId: string;
@@ -31,8 +32,17 @@ const PersonalizedChapterContent: React.FC<PersonalizedChapterContentProps> = ({
     setError(null);
 
     // If not authenticated, show original content
-    const token = (session as any)?.token || (session as any)?.accessToken;
+    if (!session) {
+      setIsPersonalizationActive(false);
+      setPersonalizedContent(null);
+      setIsLoading(false);
+      return;
+    }
+
+    // Check if we have an EdDSA token
+    const token = await getEddsaToken();
     if (!token) {
+      console.log('No EdDSA token available for personalized content');
       setIsPersonalizationActive(false);
       setPersonalizedContent(null);
       setIsLoading(false);
@@ -43,23 +53,32 @@ const PersonalizedChapterContent: React.FC<PersonalizedChapterContentProps> = ({
       // First, check if personalization is active for this chapter
       const stateResult = await getChapterPersonalizationState(chapterId);
 
+      console.log('🔍 Personalization state result:', stateResult);
+      console.log('🔍 stateResult.success:', stateResult.success);
+      console.log('🔍 stateResult.isActive:', stateResult.isActive);
+
       if (stateResult.success && stateResult.isActive) {
+        console.log('✅ Personalization is active, fetching personalized content...');
         setIsPersonalizationActive(true);
         onPersonalizationChange?.(true);
 
         // Fetch personalized content
         const contentResult = await getPersonalizedChapterContent(chapterId);
+        console.log('📦 Content result:', contentResult);
 
         if (contentResult.success && contentResult.adaptedContent) {
+          console.log('✅ Got personalized content, displaying purple banner');
           setPersonalizedContent(contentResult.adaptedContent);
           setAdaptationsApplied(contentResult.adaptationsApplied || []);
           setRelevanceScore(contentResult.relevanceScore || 0);
         } else {
+          console.warn('⚠️ Content fetch failed or no adaptedContent:', contentResult.error);
           // If fetching personalized content fails, fall back to original
           setError(contentResult.error || 'Failed to load personalized content');
           setPersonalizedContent(null);
         }
       } else {
+        console.log('❌ Personalization not active - success:', stateResult.success, 'isActive:', stateResult.isActive);
         // Personalization is not active, show original content
         setIsPersonalizationActive(false);
         setPersonalizedContent(null);
