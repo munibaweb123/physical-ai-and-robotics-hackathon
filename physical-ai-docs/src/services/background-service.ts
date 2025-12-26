@@ -1,4 +1,4 @@
-import { authBaseUrl, apiBaseUrl, authClient } from '../lib/auth-client';
+import { authBaseUrl, apiBaseUrl } from '../lib/auth-client';
 
 // Service functions for background information management
 
@@ -24,9 +24,8 @@ interface BackgroundResponse {
  */
 export const submitBackgroundInfo = async (backgroundInfo: BackgroundInfo): Promise<BackgroundResponse> => {
   try {
-    // Get the session to retrieve the token
-    const { data: session } = await authClient.getSession();
-    const token = session?.session?.token || session?.session?.id || session?.user?.id; // Fallback to session ID or user ID if token missing, but strictly should be token
+    // Get the EdDSA token from localStorage
+    const token = localStorage.getItem('auth_token');
 
     if (!token) {
       throw new Error('Authentication token not found');
@@ -69,9 +68,8 @@ export const submitBackgroundInfo = async (backgroundInfo: BackgroundInfo): Prom
  */
 export const fetchBackgroundInfo = async (): Promise<BackgroundInfo & { success: boolean, error?: string }> => {
   try {
-    // Get the session to retrieve the token
-    const { data: session } = await authClient.getSession();
-    const token = session?.session?.token || session?.session?.id || session?.user?.id;
+    // Get the EdDSA token from localStorage
+    const token = localStorage.getItem('auth_token');
 
     if (!token) {
       throw new Error('Authentication token not found');
@@ -147,9 +145,8 @@ export const fetchPersonalizedContent = async (
   page: number = 1
 ): Promise<PersonalizedContentResponse & { success: boolean, error?: string }> => {
   try {
-    // Get the session to retrieve the token
-    const { data: session } = await authClient.getSession();
-    const token = session?.session?.token || session?.session?.id || session?.user?.id;
+    // Get the EdDSA token from localStorage
+    const token = localStorage.getItem('auth_token');
 
     if (!token) {
       throw new Error('Authentication token not found');
