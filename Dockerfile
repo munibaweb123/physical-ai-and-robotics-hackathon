@@ -19,5 +19,5 @@ EXPOSE 8000
 # Define environment variable
 ENV PYTHONUNBUFFERED=1
 
-# Run huggingface_app.py when the container launches
-CMD ["uvicorn", "huggingface_app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run main.py when the container launches
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
