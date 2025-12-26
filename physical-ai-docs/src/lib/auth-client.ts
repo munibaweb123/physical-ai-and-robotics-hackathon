@@ -9,4 +9,7 @@ export { authBaseUrl, apiBaseUrl };
 
 export const authClient = createAuthClient({
     baseURL: authBaseUrl,
+    fetchOptions: {
+        credentials: 'include', // CRITICAL: Send cookies cross-origin
+    },
 })
