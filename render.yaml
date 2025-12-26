@@ -1,4 +1,31 @@
 services:
+  # Node.js Authentication Server
+  - type: web
+    name: physical-ai-auth
+    env: node
+    region: oregon
+    plan: free
+    branch: 002-expand-course-content
+    rootDir: auth-server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_PROVIDER
+        value: neon
+      - key: SESSION_COOKIE_SECRET
+        generateValue: true
+      - key: NEON_DATABASE_URL
+        sync: false
+      - key: BETTER_AUTH_URL
+        sync: false
+      - key: BETTER_AUTH_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+    healthCheckPath: /api/db/health
+
   # Python FastAPI Backend
   - type: web
     name: physical-ai-backend
@@ -17,7 +44,10 @@ services:
       - key: QDRANT_API_KEY
         sync: false
       - key: AUTH_SERVER_URL
-        value: https://physical-ai-and-robotics-hackathon.onrender.com
+        fromService:
+          type: web
+          name: physical-ai-auth
+          envVarKey: RENDER_EXTERNAL_URL
       - key: BETTER_AUTH_SECRET
         sync: false
       - key: FRONTEND_URL
