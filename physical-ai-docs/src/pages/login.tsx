@@ -20,53 +20,39 @@ function LoginPage() {
     setError(null);
     try {
       console.log('🔐 Attempting login for:', email);
-      const result = await authClient.signIn.email({ email, password });
-      console.log('✓ Login successful, result:', result);
 
-      // Extract session token from login response (Better Auth bearer plugin)
-      const sessionToken = result.data?.session?.token;
-      console.log('Session token from login:', sessionToken ? '✓ Found' : '❌ Not found');
+      // Use custom login endpoint that returns EdDSA token directly
+      const { authBaseUrl } = await import('../lib/auth-client');
+      const response = await fetch(`${authBaseUrl}/api/auth/login-with-token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email, password })
+      });
 
-      if (!sessionToken) {
-        console.error('❌ No session token in login response');
-        setError('Login succeeded but no session token received');
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('❌ Login failed:', errorData);
+        setError(errorData.error || 'Login failed');
         return;
       }
 
-      // Use session token to fetch EdDSA token (avoiding cross-site cookie issues)
-      console.log('🔑 Fetching EdDSA token for authentication...');
-      const { authBaseUrl } = await import('../lib/auth-client');
-      const tokenResponse = await fetch(`${authBaseUrl}/api/auth/token/eddsa`, {
-        headers: {
-          'Authorization': `Bearer ${sessionToken}` // Use session token as Bearer token
-        }
-      });
+      const result = await response.json();
+      console.log('✓ Login successful with EdDSA token for:', result.user.email);
 
-      if (tokenResponse.ok) {
-        const tokenData = await tokenResponse.json();
-        console.log('✓ EdDSA token received');
+      // Store token in localStorage (works cross-domain!)
+      localStorage.setItem('auth_token', result.token);
+      localStorage.setItem('auth_token_expiry', String(Date.now() + (result.expiresIn * 1000)));
+      localStorage.setItem('auth_user', JSON.stringify(result.user));
 
-        // Store token in localStorage (works cross-domain!)
-        localStorage.setItem('auth_token', tokenData.token);
-        localStorage.setItem('auth_token_expiry', String(Date.now() + (tokenData.expiresIn * 1000)));
+      console.log('✓ Authentication token stored');
 
-        // Also store user info
-        if (result.data?.user) {
-          localStorage.setItem('auth_user', JSON.stringify(result.data.user));
-        }
+      // Manually trigger session refresh
+      await refreshSession();
 
-        console.log('✓ Authentication token stored');
-
-        // Manually trigger session refresh
-        await refreshSession();
-
-        // Redirect to home
-        history.push(homePath);
-      } else {
-        const errorText = await tokenResponse.text();
-        console.error('❌ Failed to get auth token:', tokenResponse.status, errorText);
-        setError('Login succeeded but failed to get authentication token');
-      }
+      // Redirect to home
+      history.push(homePath);
     } catch (err: any) {
       console.error('❌ Login failed:', err);
       setError(err.message || 'Login failed');

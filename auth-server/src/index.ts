@@ -222,6 +222,74 @@ app.get('/api/db/migration/status', async (c) => {
     return c.json(response);
 });
 
+// Custom login endpoint that returns EdDSA token directly
+app.post('/api/auth/login-with-token', async (c) => {
+    try {
+        const { email, password } = await c.req.json();
+        console.log('🔐 Custom login attempt for:', email);
+
+        if (!email || !password) {
+            return c.json({ error: 'Email and password required' }, 400);
+        }
+
+        // Use Better Auth's sign-in to validate credentials and create session
+        const signInResult = await auth.api.signInEmail({
+            body: { email, password }
+        });
+
+        if (!signInResult || !signInResult.user) {
+            console.log('❌ Login failed for:', email);
+            return c.json({ error: 'Invalid credentials' }, 401);
+        }
+
+        console.log('✓ Credentials validated for:', email);
+
+        // Generate EdDSA token for this user
+        console.log('🔑 Generating EdDSA token...');
+        const privateKeyPEM = getEdDSAPrivateKeyPEM(eddsaKeys.privateKey);
+
+        const payload = {
+            sub: signInResult.user.id,
+            email: signInResult.user.email,
+            name: signInResult.user.name,
+            iat: Math.floor(Date.now() / 1000),
+            exp: Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60) // 7 days
+        };
+
+        let token: string;
+        try {
+            token = createEdDSAToken(payload, eddsaKeys.privateKey);
+            console.log('✓ Generated EdDSA token using native crypto');
+        } catch (nativeError) {
+            console.log('⚠ Native crypto failed, using jsonwebtoken:', nativeError);
+            token = jwt.sign(payload, privateKeyPEM, {
+                algorithm: 'EdDSA',
+                keyid: 'better-auth-eddsa-key'
+            });
+        }
+
+        console.log('✓ Login successful with EdDSA token for:', email);
+
+        return c.json({
+            success: true,
+            user: {
+                id: signInResult.user.id,
+                email: signInResult.user.email,
+                name: signInResult.user.name
+            },
+            token: token,
+            expiresIn: 7 * 24 * 60 * 60, // 7 days in seconds
+            tokenType: 'Bearer'
+        });
+    } catch (error) {
+        console.error('❌ Login with token error:', error);
+        return c.json({
+            error: 'Login failed',
+            details: error instanceof Error ? error.message : String(error)
+        }, 500);
+    }
+});
+
 // GET /api/db/health - Check database connection health
 app.get('/api/db/health', async (c) => {
     try {
