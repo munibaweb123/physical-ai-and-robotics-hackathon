@@ -27,30 +27,28 @@ export default function Chatbot() {
   const history = useHistory();
   const loginPath = useBaseUrl('/login');
 
-  // Fetch EdDSA token when session is available
+  // Get EdDSA token from localStorage
   useEffect(() => {
-    const fetchEddsaToken = async () => {
-      if (session && !eddsaToken) {
-        try {
-          const response = await fetch(`${authServerUrl}/api/auth/token/eddsa`, {
-            credentials: 'include' // Include session cookie
-          });
+    const getTokenFromStorage = () => {
+      const token = localStorage.getItem('auth_token');
+      const expiryStr = localStorage.getItem('auth_token_expiry');
 
-          if (response.ok) {
-            const data = await response.json();
-            setEddsaToken(data.token);
-            console.log('✓ EdDSA token obtained for Python backend');
-          } else {
-            console.error('Failed to get EdDSA token:', response.status);
-          }
-        } catch (error) {
-          console.error('Error fetching EdDSA token:', error);
+      if (token && expiryStr) {
+        const expiry = parseInt(expiryStr);
+        if (Date.now() < expiry) {
+          setEddsaToken(token);
+          console.log('✓ EdDSA token loaded from localStorage for chatbot');
+        } else {
+          console.warn('EdDSA token expired');
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('auth_token_expiry');
+          localStorage.removeItem('auth_user');
         }
       }
     };
 
-    fetchEddsaToken();
-  }, [session, eddsaToken, authServerUrl]);
+    getTokenFromStorage();
+  }, [session]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -87,21 +85,16 @@ export default function Chatbot() {
     if (eddsaToken) {
         headers['Authorization'] = `Bearer ${eddsaToken}`;
     } else {
-        // If we don't have an EdDSA token yet, try to fetch it
-        console.warn('No EdDSA token available, fetching...');
-        try {
-            const tokenResponse = await fetch(`${authServerUrl}/api/auth/token/eddsa`, {
-                credentials: 'include'
-            });
-            if (tokenResponse.ok) {
-                const tokenData = await tokenResponse.json();
-                setEddsaToken(tokenData.token);
-                headers['Authorization'] = `Bearer ${tokenData.token}`;
-            } else {
-                throw new Error('Failed to get EdDSA token');
-            }
-        } catch (error) {
-            console.error('Error fetching EdDSA token:', error);
+        // If we don't have an EdDSA token yet, try to get it from localStorage
+        console.warn('No EdDSA token available, checking localStorage...');
+        const token = localStorage.getItem('auth_token');
+        const expiryStr = localStorage.getItem('auth_token_expiry');
+
+        if (token && expiryStr && Date.now() < parseInt(expiryStr)) {
+            setEddsaToken(token);
+            headers['Authorization'] = `Bearer ${token}`;
+        } else {
+            console.error('No valid EdDSA token found, redirecting to login');
             history.push(loginPath);
             setIsLoading(false);
             return;
