@@ -38,6 +38,9 @@ jobs:
 
       - name: Build Docusaurus site
         working-directory: ./physical-ai-docs
+        env:
+          DOCUSAURUS_BETTER_AUTH_URL: https://physical-ai-and-robotics-hackathon.onrender.com
+          NEXT_PUBLIC_API_URL: https://physicalai-backend.hf.space/api
         run: npm run build
 
       - name: Upload artifact
