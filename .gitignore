@@ -76,4 +76,4 @@ temp/
 
 # Better Auth
 auth-server/auth_v2.db
-auth-server/auth_v2.db.backup
+auth-server/auth_v2.db.backuphf-backend-deploy/
