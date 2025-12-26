@@ -13,15 +13,33 @@ function CustomLogoutButton() {
   useEffect(() => {
     const fetchUser = async () => {
       try {
+        console.log('👤 Fetching user session...');
         const { data: session } = await authClient.getSession();
-        setUser(session?.user || null);
+        console.log('Session data:', session);
+        if (session?.user) {
+          console.log('✓ User logged in:', session.user.email);
+          setUser(session.user);
+        } else {
+          console.log('❌ No user session found');
+          setUser(null);
+        }
       } catch (error) {
-        console.error('Failed to fetch session:', error);
+        console.error('❌ Failed to fetch session:', error);
         setUser(null);
       }
     };
 
     fetchUser();
+
+    // Also subscribe to auth state changes
+    const { data: authListener } = authClient.onAuthStateChange((event, session) => {
+      console.log(`🔔 Auth event: ${event}`, session);
+      setUser(session?.user || null);
+    });
+
+    return () => {
+      authListener?.subscription.unsubscribe();
+    };
   }, [location.pathname]); // Re-fetch user on route change
 
   const handleLogout = async () => {

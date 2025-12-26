@@ -19,10 +19,24 @@ function LoginPage() {
     e.preventDefault();
     setError(null);
     try {
-      await authClient.signIn.email({ email, password });
+      console.log('🔐 Attempting login for:', email);
+      const result = await authClient.signIn.email({ email, password });
+      console.log('✓ Login successful, result:', result);
+
+      // Wait a bit for session cookie to be set
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      console.log('🔄 Refreshing session...');
       await refreshSession(); // Refresh session state in context
+      console.log('✓ Session refreshed');
+
+      // Verify session was actually set
+      const { data: sessionCheck } = await authClient.getSession();
+      console.log('📋 Session check:', sessionCheck);
+
       history.push(homePath); // Redirect to home on successful login
     } catch (err: any) {
+      console.error('❌ Login failed:', err);
       setError(err.message || 'Login failed');
     }
   };
