@@ -21,8 +21,8 @@ const config: Config = {
   url: 'https://munibaweb123.github.io',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
-  
-  baseUrl: '/',
+
+  baseUrl: '/physical-ai-and-robotics-hackathon/',
 
   stylesheets: [
     {
