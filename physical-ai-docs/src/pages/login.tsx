@@ -23,11 +23,23 @@ function LoginPage() {
       const result = await authClient.signIn.email({ email, password });
       console.log('✓ Login successful, result:', result);
 
-      // Since cross-site cookies don't work, get JWT token instead
+      // Extract session token from login response (Better Auth bearer plugin)
+      const sessionToken = result.data?.session?.token;
+      console.log('Session token from login:', sessionToken ? '✓ Found' : '❌ Not found');
+
+      if (!sessionToken) {
+        console.error('❌ No session token in login response');
+        setError('Login succeeded but no session token received');
+        return;
+      }
+
+      // Use session token to fetch EdDSA token (avoiding cross-site cookie issues)
       console.log('🔑 Fetching EdDSA token for authentication...');
       const { authBaseUrl } = await import('../lib/auth-client');
       const tokenResponse = await fetch(`${authBaseUrl}/api/auth/token/eddsa`, {
-        credentials: 'include'
+        headers: {
+          'Authorization': `Bearer ${sessionToken}` // Use session token as Bearer token
+        }
       });
 
       if (tokenResponse.ok) {
@@ -51,7 +63,8 @@ function LoginPage() {
         // Redirect to home
         history.push(homePath);
       } else {
-        console.error('❌ Failed to get auth token:', tokenResponse.status);
+        const errorText = await tokenResponse.text();
+        console.error('❌ Failed to get auth token:', tokenResponse.status, errorText);
         setError('Login succeeded but failed to get authentication token');
       }
     } catch (err: any) {
