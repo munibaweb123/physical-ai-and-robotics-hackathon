@@ -491,8 +491,8 @@ app.post('/api/auth/user/background', async (c) => {
     try {
         const headers = c.req.raw.headers;
         console.log('User Background Headers:', JSON.stringify(Object.fromEntries(headers.entries())));
-        
-        const session = await auth.api.getSession({
+
+        let session = await auth.api.getSession({
             headers: c.req.raw.headers
         });
 
@@ -501,24 +501,61 @@ app.post('/api/auth/user/background', async (c) => {
             const authHeader = c.req.header('Authorization');
             if (authHeader && authHeader.startsWith('Bearer ')) {
                 const token = authHeader.split(' ')[1];
-                // Verify the opaque token against the session table
-                const dbSession = await db.selectFrom('session')
-                    .selectAll()
-                    .where('token', '=', token)
-                    .executeTakeFirst();
 
-                if (dbSession && dbSession.expiresAt > new Date()) {
-                     // Fetch user for this session
-                     const user = await db.selectFrom('user')
+                // First, try to verify as EdDSA JWT token
+                try {
+                    // Convert public key from base64url to PEM format
+                    const base64 = eddsaKeys.publicKey.replace(/-/g, '+').replace(/_/g, '/');
+                    const padding = '='.repeat((4 - (base64.length % 4)) % 4);
+                    const publicKeyBuffer = Buffer.from(base64 + padding, 'base64');
+
+                    // Create public key object
+                    const publicKey = crypto.createPublicKey({
+                        key: publicKeyBuffer,
+                        format: 'der',
+                        type: 'spki'
+                    });
+
+                    // Verify the JWT
+                    const decoded = jwt.verify(token, publicKey, {
+                        algorithms: ['EdDSA']
+                    }) as any;
+
+                    console.log('✓ EdDSA JWT verified for user:', decoded.email);
+
+                    // Fetch user from database
+                    const user = await db.selectFrom('user')
                         .selectAll()
-                        .where('id', '=', dbSession.userId)
+                        .where('id', '=', decoded.sub)
                         .executeTakeFirst();
-                     
-                     if (user) {
-                         // Manually construct session object
-                         // @ts-ignore
-                         session = { session: dbSession, user: user };
-                     }
+
+                    if (user) {
+                        // Construct session object
+                        session = {
+                            session: { userId: user.id },
+                            user: user
+                        } as any;
+                    }
+                } catch (jwtError) {
+                    console.log('Not a valid EdDSA JWT, trying as opaque session token');
+                    // Fallback: Try as opaque token against the session table
+                    const dbSession = await db.selectFrom('session')
+                        .selectAll()
+                        .where('token', '=', token)
+                        .executeTakeFirst();
+
+                    if (dbSession && dbSession.expiresAt > new Date()) {
+                         // Fetch user for this session
+                         const user = await db.selectFrom('user')
+                            .selectAll()
+                            .where('id', '=', dbSession.userId)
+                            .executeTakeFirst();
+
+                         if (user) {
+                             // Manually construct session object
+                             session = { session: dbSession, user: user } as any;
+                         }
+                    }
                 }
             }
         }
@@ -589,9 +626,53 @@ app.post('/api/auth/user/background', async (c) => {
 // GET endpoint to retrieve user background information
 app.get('/api/auth/user/background', async (c) => {
     try {
-        const session = await auth.api.getSession({
+        let session = await auth.api.getSession({
             headers: c.req.raw.headers
         });
+
+        if (!session) {
+            // Fallback: Check for Bearer token (EdDSA JWT)
+            const authHeader = c.req.header('Authorization');
+            if (authHeader && authHeader.startsWith('Bearer ')) {
+                const token = authHeader.split(' ')[1];
+
+                try {
+                    // Convert public key from base64url to buffer
+                    const base64 = eddsaKeys.publicKey.replace(/-/g, '+').replace(/_/g, '/');
+                    const padding = '='.repeat((4 - (base64.length % 4)) % 4);
+                    const publicKeyBuffer = Buffer.from(base64 + padding, 'base64');
+
+                    // Create public key object
+                    const publicKey = crypto.createPublicKey({
+                        key: publicKeyBuffer,
+                        format: 'der',
+                        type: 'spki'
+                    });
+
+                    // Verify the JWT
+                    const decoded = jwt.verify(token, publicKey, {
+                        algorithms: ['EdDSA']
+                    }) as any;
+
+                    console.log('✓ EdDSA JWT verified for user:', decoded.email);
+
+                    // Fetch user from database
+                    const user = await db.selectFrom('user')
+                        .selectAll()
+                        .where('id', '=', decoded.sub)
+                        .executeTakeFirst();
+
+                    if (user) {
+                        session = {
+                            session: { userId: user.id },
+                            user: user
+                        } as any;
+                    }
+                } catch (jwtError) {
+                    console.log('JWT verification failed:', jwtError);
+                }
+            }
+        }
 
         if (!session) {
             return c.json({ success: false, error: 'Authentication required' }, 401);
