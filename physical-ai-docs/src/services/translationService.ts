@@ -2,7 +2,7 @@
 // or use a browser-compatible translation service
 // This is a simplified implementation that simulates translation
 
-import { authClient } from '../lib/auth-client';
+import { authClient, apiBaseUrl } from '../lib/auth-client';
 import { getEddsaToken } from '../lib/token-utils';
 
 interface TranslationRequest {
@@ -232,17 +232,6 @@ const performTranslation = async (content: string, sourceLang: string, targetLan
     }
 
     console.log('✓ Using EdDSA token for translation request');
-
-    // Check if we have API base URL from docusaurus config
-    // In Docusaurus, we can access siteConfig which may contain custom fields
-    let apiBaseUrl = '/api'; // default fallback
-
-    if (typeof window !== 'undefined' && window.location) {
-      // For browser environment, use the configured API URL or default to backend on port 8000
-      apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ||
-                  (window as any).env?.NEXT_PUBLIC_API_URL ||
-                  'http://localhost:8000/api'; // Assuming backend runs on port 8000
-    }
 
     // Make the actual API call to translate content
     // The backend expects: sourceLanguage, targetLanguage, content, chapterId
