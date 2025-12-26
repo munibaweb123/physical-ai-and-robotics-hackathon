@@ -1,67 +1,60 @@
 /**
  * Utility functions for managing EdDSA JWT tokens
+ * Token is now stored in localStorage during login
  */
-
-import { authBaseUrl } from './auth-client';
-
-let cachedEddsaToken: string | null = null;
-let tokenExpiryTime: number | null = null;
 
 /**
- * Fetch a new EdDSA token from the auth server
+ * Get the EdDSA token from localStorage
  */
-async function fetchNewEddsaToken(): Promise<string | null> {
+export async function getEddsaToken(): Promise<string | null> {
   try {
-    const response = await fetch(`${authBaseUrl}/api/auth/token/eddsa`, {
-      credentials: 'include' // Include session cookie
-    });
+    // Get token from localStorage (stored during login)
+    const token = localStorage.getItem('auth_token');
+    const expiryStr = localStorage.getItem('auth_token_expiry');
 
-    if (!response.ok) {
-      console.error(`Failed to get EdDSA token: ${response.status}`);
+    if (!token || !expiryStr) {
+      console.warn('No EdDSA token available in localStorage');
       return null;
     }
 
-    const data = await response.json();
-
-    if (data.token) {
-      // Store token and set expiry time (token expires in 7 days, we'll refresh after 6)
-      cachedEddsaToken = data.token;
-      tokenExpiryTime = Date.now() + (6 * 24 * 60 * 60 * 1000); // 6 days in milliseconds
-      console.log('✓ EdDSA token obtained successfully');
-      return data.token;
+    // Check if token is expired
+    const expiry = parseInt(expiryStr);
+    if (Date.now() >= expiry) {
+      console.warn('EdDSA token expired');
+      // Clear expired token
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('auth_token_expiry');
+      localStorage.removeItem('auth_user');
+      return null;
     }
 
-    return null;
+    return token;
   } catch (error) {
-    console.error('Error fetching EdDSA token:', error);
+    console.error('Error getting EdDSA token:', error);
     return null;
   }
 }
 
 /**
- * Get an EdDSA token, using cached version if available and not expired
- */
-export async function getEddsaToken(): Promise<string | null> {
-  // Check if we have a cached token that hasn't expired
-  if (cachedEddsaToken && tokenExpiryTime && Date.now() < tokenExpiryTime) {
-    return cachedEddsaToken;
-  }
-
-  // Fetch a new token
-  return await fetchNewEddsaToken();
-}
-
-/**
- * Clear the cached token (useful after logout)
+ * Clear the token (useful after logout)
  */
 export function clearEddsaToken(): void {
-  cachedEddsaToken = null;
-  tokenExpiryTime = null;
+  localStorage.removeItem('auth_token');
+  localStorage.removeItem('auth_token_expiry');
+  localStorage.removeItem('auth_user');
 }
 
 /**
- * Check if we have a valid cached token
+ * Check if we have a valid token
  */
 export function hasValidEddsaToken(): boolean {
-  return !!(cachedEddsaToken && tokenExpiryTime && Date.now() < tokenExpiryTime);
+  const token = localStorage.getItem('auth_token');
+  const expiryStr = localStorage.getItem('auth_token_expiry');
+
+  if (!token || !expiryStr) {
+    return false;
+  }
+
+  const expiry = parseInt(expiryStr);
+  return Date.now() < expiry;
 }
