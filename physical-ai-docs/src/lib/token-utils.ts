@@ -2,17 +2,17 @@
  * Utility functions for managing EdDSA JWT tokens
  */
 
+import { authBaseUrl } from './auth-client';
+
 let cachedEddsaToken: string | null = null;
 let tokenExpiryTime: number | null = null;
-
-const AUTH_SERVER_URL = process.env.DOCUSAURUS_BETTER_AUTH_URL || 'http://localhost:10000';
 
 /**
  * Fetch a new EdDSA token from the auth server
  */
 async function fetchNewEddsaToken(): Promise<string | null> {
   try {
-    const response = await fetch(`${AUTH_SERVER_URL}/api/auth/token/eddsa`, {
+    const response = await fetch(`${authBaseUrl}/api/auth/token/eddsa`, {
       credentials: 'include' // Include session cookie
     });
 
