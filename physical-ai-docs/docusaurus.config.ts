@@ -18,11 +18,18 @@ const config: Config = {
   },
 
   // Set the production url of your site here
-  url: 'https://munibaweb123.github.io',
+  url: process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : 'https://munibaweb123.github.io',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
-  // Use '/' for localhost development, '/physical-ai-and-robotics-hackathon/' for production
-  baseUrl: process.env.NODE_ENV === 'production' ? '/physical-ai-and-robotics-hackathon/' : '/',
+  // For Vercel, it's '/'
+  // For localhost development, it's '/'
+  baseUrl: process.env.VERCEL
+    ? '/'  // Vercel deployment
+    : process.env.NODE_ENV === 'production'
+      ? '/physical-ai-and-robotics-hackathon/'  // GitHub Pages
+      : '/',  // Localhost
 
   stylesheets: [
     {
