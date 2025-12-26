@@ -167,6 +167,9 @@ const PersonalizedChapterContent: React.FC<PersonalizedChapterContentProps> = ({
 
   // If personalization is active and we have personalized content, show it
   if (isPersonalizationActive && personalizedContent) {
+    console.log('🎨 RENDERING PURPLE BANNER with content length:', personalizedContent.length);
+    console.log('🎨 Content preview:', personalizedContent.substring(0, 200));
+
     return (
       <div className="personalized-content-wrapper">
         <div className="personalization-banner">
@@ -292,6 +295,25 @@ const PersonalizedChapterContent: React.FC<PersonalizedChapterContentProps> = ({
 
           .personalized-content {
             /* Inherit markdown styles from Docusaurus theme */
+            background-color: #f9f9f9;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 2px solid #667eea;
+            min-height: 200px;
+          }
+
+          .personalized-content h1,
+          .personalized-content h2,
+          .personalized-content h3 {
+            color: #333;
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+          }
+
+          .personalized-content p {
+            color: #555;
+            line-height: 1.6;
+            margin-bottom: 1rem;
           }
 
           @media (max-width: 768px) {

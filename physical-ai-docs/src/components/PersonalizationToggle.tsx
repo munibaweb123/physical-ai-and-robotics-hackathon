@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../lib/AuthContext';
 import { submitBackgroundInfo, fetchBackgroundInfo } from '../services/background-service';
+import { getEddsaToken } from '../lib/token-utils';
 
 interface PersonalizationToggleProps {
   chapterId: string;
@@ -53,8 +54,7 @@ const PersonalizationToggle: React.FC<PersonalizationToggleProps> = ({
   };
 
   const handleToggle = async () => {
-    const token = (session as any)?.token || session?.accessToken;
-    if (!token) {
+    if (!session) {
       alert('You must be logged in to enable personalization.');
       return;
     }
@@ -63,6 +63,14 @@ const PersonalizationToggle: React.FC<PersonalizationToggleProps> = ({
     setIsLoading(true);
 
     try {
+      // Check if we have an EdDSA token
+      const token = await getEddsaToken();
+      if (!token) {
+        alert('Authentication required. Please log in again.');
+        window.location.href = '/login';
+        return;
+      }
+
       if (newActiveState && !hasBackgroundInfo) {
         // If user doesn't have background info, redirect to profile to add it
         window.location.href = '/profile';

@@ -3,6 +3,7 @@
 // This is a simplified implementation that simulates translation
 
 import { authClient } from '../lib/auth-client';
+import { getEddsaToken } from '../lib/token-utils';
 
 interface TranslationRequest {
   content: string;
@@ -222,16 +223,15 @@ const performTranslation = async (content: string, sourceLang: string, targetLan
   // In a real implementation, this would make an API call to our backend service
   // that handles the translation to avoid exposing API keys in the browser
   try {
-    // Get the session to retrieve the token
-    const { data: session } = await authClient.getSession();
-    console.log('Full session object:', session);
-
-    const token = session?.accessToken || session?.session?.token || session?.session?.id || session?.user?.id;
-    console.log('Extracted token:', token, 'Type:', typeof token);
+    // Get EdDSA token for authentication
+    const token = await getEddsaToken();
 
     if (!token) {
-      throw new Error('Authentication token not found');
+      console.error('Failed to get EdDSA token for translation');
+      throw new Error('Authentication required - please log in');
     }
+
+    console.log('✓ Using EdDSA token for translation request');
 
     // Check if we have API base URL from docusaurus config
     // In Docusaurus, we can access siteConfig which may contain custom fields

@@ -14,16 +14,43 @@ interface Message {
 export default function Chatbot() {
   const { siteConfig } = useDocusaurusContext();
   const apiBaseUrl = (siteConfig.customFields?.apiBaseUrl as string) || 'http://localhost:8000';
+  const authServerUrl = (siteConfig.customFields?.authBaseUrl as string) || 'http://localhost:10000';
 
   const [messages, setMessages] = useState<Message[]>([
     { id: '1', text: 'Hello! I am your AI assistant for this course. Ask me anything about Physical AI, ROS 2, or the provided reading materials.', sender: 'bot' }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [eddsaToken, setEddsaToken] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { session, isLoading: authLoading } = useAuth(); // Get session and authLoading state
   const history = useHistory();
   const loginPath = useBaseUrl('/login');
+
+  // Fetch EdDSA token when session is available
+  useEffect(() => {
+    const fetchEddsaToken = async () => {
+      if (session && !eddsaToken) {
+        try {
+          const response = await fetch(`${authServerUrl}/api/auth/token/eddsa`, {
+            credentials: 'include' // Include session cookie
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            setEddsaToken(data.token);
+            console.log('✓ EdDSA token obtained for Python backend');
+          } else {
+            console.error('Failed to get EdDSA token:', response.status);
+          }
+        } catch (error) {
+          console.error('Error fetching EdDSA token:', error);
+        }
+      }
+    };
+
+    fetchEddsaToken();
+  }, [session, eddsaToken, authServerUrl]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -56,15 +83,29 @@ export default function Chatbot() {
         'Content-Type': 'application/json',
     };
 
-    // Add Authorization header with the session token
-    // The session from our AuthContext contains the token
-    if (session && (session as any).token) {
-        headers['Authorization'] = `Bearer ${(session as any).token}`;
-    } else if (session && (session as any).accessToken) {
-        headers['Authorization'] = `Bearer ${(session as any).accessToken}`;
-    } else if (session && session.session?.id) {
-         // Fallback if access token is missing in type but present in runtime or vice versa
-        headers['Authorization'] = `Bearer ${session.session.id}`;
+    // Add Authorization header with the EdDSA token for Python backend
+    if (eddsaToken) {
+        headers['Authorization'] = `Bearer ${eddsaToken}`;
+    } else {
+        // If we don't have an EdDSA token yet, try to fetch it
+        console.warn('No EdDSA token available, fetching...');
+        try {
+            const tokenResponse = await fetch(`${authServerUrl}/api/auth/token/eddsa`, {
+                credentials: 'include'
+            });
+            if (tokenResponse.ok) {
+                const tokenData = await tokenResponse.json();
+                setEddsaToken(tokenData.token);
+                headers['Authorization'] = `Bearer ${tokenData.token}`;
+            } else {
+                throw new Error('Failed to get EdDSA token');
+            }
+        } catch (error) {
+            console.error('Error fetching EdDSA token:', error);
+            history.push(loginPath);
+            setIsLoading(false);
+            return;
+        }
     }
 
     try {
