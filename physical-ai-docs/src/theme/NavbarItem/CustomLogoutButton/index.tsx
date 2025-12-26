@@ -14,6 +14,27 @@ function CustomLogoutButton() {
     const fetchUser = async () => {
       try {
         console.log('👤 Fetching user session...');
+
+        // First check localStorage (for JWT token auth)
+        const authUser = localStorage.getItem('auth_user');
+        const authToken = localStorage.getItem('auth_token');
+        const tokenExpiry = localStorage.getItem('auth_token_expiry');
+
+        if (authUser && authToken && tokenExpiry) {
+          const expiryTime = parseInt(tokenExpiry);
+          if (Date.now() < expiryTime) {
+            console.log('✓ User logged in via token:', JSON.parse(authUser).email);
+            setUser(JSON.parse(authUser));
+            return;
+          } else {
+            console.log('⚠️ Token expired, clearing...');
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('auth_user');
+            localStorage.removeItem('auth_token_expiry');
+          }
+        }
+
+        // Fallback to session-based auth
         const { data: session } = await authClient.getSession();
         console.log('Session data:', session);
         if (session?.user) {
@@ -44,6 +65,12 @@ function CustomLogoutButton() {
 
   const handleLogout = async () => {
     try {
+      // Clear localStorage token
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('auth_user');
+      localStorage.removeItem('auth_token_expiry');
+
+      // Also sign out from auth server
       await authClient.signOut();
       setUser(null);
       history.push(loginPath); // Redirect to login page after logout

@@ -23,18 +23,37 @@ function LoginPage() {
       const result = await authClient.signIn.email({ email, password });
       console.log('✓ Login successful, result:', result);
 
-      // Wait a bit for session cookie to be set
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Since cross-site cookies don't work, get JWT token instead
+      console.log('🔑 Fetching EdDSA token for authentication...');
+      const { authBaseUrl } = await import('../lib/auth-client');
+      const tokenResponse = await fetch(`${authBaseUrl}/api/auth/token/eddsa`, {
+        credentials: 'include'
+      });
 
-      console.log('🔄 Refreshing session...');
-      await refreshSession(); // Refresh session state in context
-      console.log('✓ Session refreshed');
+      if (tokenResponse.ok) {
+        const tokenData = await tokenResponse.json();
+        console.log('✓ EdDSA token received');
 
-      // Verify session was actually set
-      const { data: sessionCheck } = await authClient.getSession();
-      console.log('📋 Session check:', sessionCheck);
+        // Store token in localStorage (works cross-domain!)
+        localStorage.setItem('auth_token', tokenData.token);
+        localStorage.setItem('auth_token_expiry', String(Date.now() + (tokenData.expiresIn * 1000)));
 
-      history.push(homePath); // Redirect to home on successful login
+        // Also store user info
+        if (result.data?.user) {
+          localStorage.setItem('auth_user', JSON.stringify(result.data.user));
+        }
+
+        console.log('✓ Authentication token stored');
+
+        // Manually trigger session refresh
+        await refreshSession();
+
+        // Redirect to home
+        history.push(homePath);
+      } else {
+        console.error('❌ Failed to get auth token:', tokenResponse.status);
+        setError('Login succeeded but failed to get authentication token');
+      }
     } catch (err: any) {
       console.error('❌ Login failed:', err);
       setError(err.message || 'Login failed');
