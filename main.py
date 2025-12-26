@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 # --- Pydantic Settings Model ---
 class Settings(BaseSettings):
-    OPENAI_API_KEY: str = Field(..., description="OpenAI API Key")
+    GEMINI_API_KEY: str = Field(..., description="Gemini API Key (used with OpenAI-compatible client)")
     QDRANT_URL: str = Field(..., description="Qdrant Cloud URL")
     QDRANT_API_KEY: str = Field(..., description="Qdrant API Key")
     AUTH_SERVER_URL: str = Field(..., description="URL of the Node.js auth server")
@@ -71,14 +71,14 @@ app.add_middleware(
 )
 
 # --- Global Clients and Connection Pools ---
-openai_client: Optional[AsyncOpenAI] = None
+gemini_client: Optional[AsyncOpenAI] = None  # For both chat completions and embeddings using Gemini
 qdrant_client: Optional[AsyncQdrantClient] = None
 http_client: Optional[httpx.AsyncClient] = None # Add httpx client
 personalization_engine: Optional[PersonalizationEngine] = None
 
 QDRANT_COLLECTION_NAME = "book_chunks"
-EMBEDDING_MODEL = "text-embedding-3-small"
-OPENAI_CHAT_MODEL = "gpt-4o" # or "gpt-3.5-turbo"
+GEMINI_EMBEDDING_MODEL = "gemini-embedding-001"  # Gemini model for embeddings
+GEMINI_CHAT_MODEL = "gemini-2.5-flash"  # Gemini model for chat completions (2025 stable model)
 
 # Import the new authentication system
 from auth.core import get_current_user, AuthenticatedUser
@@ -347,17 +347,22 @@ async def startup_event():
     """
     Initialize clients and database connections on app startup.
     """
-    global openai_client, qdrant_client, http_client, personalization_engine
+    global gemini_client, qdrant_client, http_client, personalization_engine
 
     logger.info("Initializing application resources...")
 
     try:
-        openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        # Initialize Gemini client for both chat completions and embeddings (OpenAI-compatible endpoint)
+        gemini_client = AsyncOpenAI(
+            api_key=settings.GEMINI_API_KEY,
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+        )
+        logger.info("✅ Initialized Gemini API client for chat completions and embeddings")
         # Strip any whitespace/newlines from the QDRANT_API_KEY to prevent header validation errors
         qdrant_api_key = settings.QDRANT_API_KEY.strip() if settings.QDRANT_API_KEY else settings.QDRANT_API_KEY
         qdrant_client = AsyncQdrantClient(url=settings.QDRANT_URL, api_key=qdrant_api_key)
         http_client = httpx.AsyncClient() # Initialize httpx client
-        personalization_engine = PersonalizationEngine() # Initialize personalization engine
+        personalization_engine = PersonalizationEngine(openai_client=gemini_client) # Initialize with Gemini client
 
         # Load system prompts
         load_socratic_prompt()
@@ -414,16 +419,16 @@ async def shutdown_event():
 # --- RAG Helper Functions ---
 async def generate_embeddings(text: str) -> List[float]:
     """
-    Generates embeddings for the given text using OpenAI's embedding model.
+    Generates embeddings for the given text using Gemini's embedding model via OpenAI-compatible API.
     """
     try:
-        response = await openai_client.embeddings.create(
+        response = await gemini_client.embeddings.create(
             input=text,
-            model=EMBEDDING_MODEL
+            model=GEMINI_EMBEDDING_MODEL
         )
         return response.data[0].embedding
     except Exception as e:
-        logger.error(f"Error generating embeddings: {e}", exc_info=True)
+        logger.error(f"Error generating embeddings with Gemini: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to generate embeddings.")
 
 def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
@@ -603,13 +608,13 @@ async def chat_with_rag(request: ChatRequest, user: Dict[str, Any] = Depends(aut
     ]
 
     try:
-        chat_completion = await openai_client.chat.completions.create(
-            model=OPENAI_CHAT_MODEL,
+        chat_completion = await gemini_client.chat.completions.create(
+            model=GEMINI_CHAT_MODEL,
             messages=messages,
             temperature=0.0 # Keep responses factual
         )
         response_content = chat_completion.choices[0].message.content
-        logger.info(f"OpenAI chat completion successful for query: '{request.user_query}'")
+        logger.info(f"Gemini chat completion successful for query: '{request.user_query}'")
         return ChatResponse(response=response_content)
 
     except Exception as e:
@@ -972,7 +977,7 @@ async def get_personalized_chapter_content(
 
         # Adapt the content based on user profile and preferences
         logger.info(f"🎨 Adapting content for user profile: {user_prefs.get('complexityLevel', 'unknown')}")
-        adapted_result = personalization_engine.adapt_content_for_chapter(
+        adapted_result = await personalization_engine.adapt_content_for_chapter(
             content=chapter_markdown,
             user_profile=user_prefs,
             chapter_id=chapter_id,
@@ -1274,9 +1279,9 @@ async def translate_content(request: TranslationRequest, user: Dict[str, Any] = 
         if not request.content or not request.content.strip():
             raise HTTPException(status_code=400, detail="Content cannot be empty")
 
-        # Use OpenAI client to translate the content
-        response = await openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",  # You can also use "gpt-4" if preferred
+        # Use Gemini API client to translate the content
+        response = await gemini_client.chat.completions.create(
+            model=GEMINI_CHAT_MODEL,
             messages=[
                 {
                     "role": "system",
