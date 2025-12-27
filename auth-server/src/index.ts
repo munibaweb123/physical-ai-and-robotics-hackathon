@@ -531,8 +531,19 @@ app.get('/api/auth/on-auth-state-change', async (c) => {
 // Better Auth routes - This should be last to avoid intercepting custom endpoints
 app.all('/api/auth/*', async (c) => {
     console.log('-> Better Auth Request:', c.req.method, c.req.path);
-    const response = await auth.handler(c.req.raw);
-    return response;
+    try {
+        const response = await auth.handler(c.req.raw);
+        return response;
+    } catch (error) {
+        console.error('❌ Better Auth Error:', error);
+        console.error('Error details:', error instanceof Error ? error.message : String(error));
+        console.error('Stack:', error instanceof Error ? error.stack : 'No stack');
+        return c.json({
+            error: 'Better Auth internal error',
+            message: error instanceof Error ? error.message : String(error),
+            path: c.req.path
+        }, 500);
+    }
 });
 
 const port = parseInt(process.env.PORT || '10000', 10);
