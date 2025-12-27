@@ -617,6 +617,31 @@ app.all('/api/auth/*', async (c) => {
     console.log('-> Better Auth Request:', c.req.method, c.req.path);
     try {
         const response = await auth.handler(c.req.raw);
+
+        // Intercept sign-in responses to add token to response body
+        if (c.req.path === '/api/auth/sign-in/email' && c.req.method === 'POST') {
+            const clonedResponse = response.clone();
+            const data = await clonedResponse.json();
+
+            // Get session using the response cookies
+            const session = await auth.api.getSession({
+                headers: response.headers
+            });
+
+            if (session && session.session) {
+                // Add token to response
+                data.token = session.session.token;
+                data.expiresAt = session.session.expiresAt;
+                console.log('✓ Injected token into sign-in response');
+
+                return new Response(JSON.stringify(data), {
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers: response.headers
+                });
+            }
+        }
+
         return response;
     } catch (error) {
         console.error('❌ Better Auth Error:', error);

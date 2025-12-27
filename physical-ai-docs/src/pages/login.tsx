@@ -47,12 +47,14 @@ function LoginPage() {
         localStorage.setItem('auth_user', JSON.stringify(result.user));
       }
 
-      // Extract token from sign-in response (Better Auth includes it)
-      if (result.session?.token) {
-        localStorage.setItem('auth_token', result.session.token);
-        const expiresAt = new Date(result.session.expiresAt).getTime();
+      // Token is injected into sign-in response by backend
+      if (result.token) {
+        localStorage.setItem('auth_token', result.token);
+        const expiresAt = new Date(result.expiresAt).getTime();
         localStorage.setItem('auth_token_expiry', String(expiresAt));
         console.log('✓ Token stored from sign-in response');
+      } else {
+        console.warn('⚠️  No token in sign-in response');
       }
 
       // Manually trigger session refresh
