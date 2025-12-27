@@ -502,6 +502,50 @@ app.get('/api/auth/chapters/:chapterId/personalize', async (c) => {
     }
 });
 
+// Custom sign-in endpoint that ensures cookies are set correctly
+app.post('/api/auth/custom-signin', async (c) => {
+    try {
+        const { email, password } = await c.req.json();
+        console.log('🔐 Custom sign-in attempt for:', email);
+
+        // Use Better Auth's sign-in
+        const result = await auth.api.signInEmail({
+            body: { email, password }
+        });
+
+        if (!result || !result.user) {
+            console.log('❌ Sign-in failed for:', email);
+            return c.json({ error: 'Invalid credentials' }, 401);
+        }
+
+        console.log('✓ Sign-in successful for:', email);
+
+        // Get the session to extract token
+        const session = await auth.api.getSession({
+            headers: c.req.raw.headers
+        });
+
+        if (session && session.session) {
+            // Manually set cookie with explicit flags for cross-origin
+            const cookieValue = `auth_session=${session.session.token}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=604800`;
+            c.header('Set-Cookie', cookieValue);
+            console.log('✓ Set session cookie for:', email);
+
+            return c.json({
+                success: true,
+                user: result.user,
+                token: session.session.token,
+                expiresAt: session.session.expiresAt
+            });
+        }
+
+        return c.json({ error: 'Failed to create session' }, 500);
+    } catch (error) {
+        console.error('❌ Custom sign-in error:', error);
+        return c.json({ error: 'Sign-in failed' }, 500);
+    }
+});
+
 // Custom endpoint to get session token for Bearer authentication
 app.get('/api/auth/token', async (c) => {
     // Debug: Log all headers
