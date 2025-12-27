@@ -21,32 +21,51 @@ function LoginPage() {
     try {
       console.log('🔐 Attempting login for:', email);
 
-      // Use custom login endpoint that returns EdDSA token directly
+      // Use Better Auth's native sign-in endpoint
       const { authBaseUrl } = await import('../lib/auth-client');
-      const response = await fetch(`${authBaseUrl}/api/auth/login-with-token`, {
+      const response = await fetch(`${authBaseUrl}/api/auth/sign-in/email`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
+        credentials: 'include', // Important for session cookies
         body: JSON.stringify({ email, password })
       });
 
       if (!response.ok) {
         const errorData = await response.json();
         console.error('❌ Login failed:', errorData);
-        setError(errorData.error || 'Login failed');
+        setError(errorData.error || errorData.message || 'Login failed');
         return;
       }
 
       const result = await response.json();
-      console.log('✓ Login successful with EdDSA token for:', result.user.email);
+      console.log('✓ Login successful for:', result.user?.email || email);
 
-      // Store token in localStorage (works cross-domain!)
-      localStorage.setItem('auth_token', result.token);
-      localStorage.setItem('auth_token_expiry', String(Date.now() + (result.expiresIn * 1000)));
-      localStorage.setItem('auth_user', JSON.stringify(result.user));
+      // Store user and token in localStorage (works cross-domain!)
+      if (result.user) {
+        localStorage.setItem('auth_user', JSON.stringify(result.user));
+      }
 
-      console.log('✓ Authentication token stored');
+      // Get session to extract JWT token for Bearer auth
+      const sessionResponse = await fetch(`${authBaseUrl}/api/auth/get-session`, {
+        method: 'GET',
+        credentials: 'include'
+      });
+
+      if (sessionResponse.ok) {
+        const sessionData = await sessionResponse.json();
+        if (sessionData.session?.token) {
+          // Store token for Bearer authentication (cross-domain API calls)
+          localStorage.setItem('auth_token', sessionData.session.token);
+
+          // Calculate expiry (7 days from now as per auth server config)
+          const expiresIn = 7 * 24 * 60 * 60; // 7 days in seconds
+          localStorage.setItem('auth_token_expiry', String(Date.now() + (expiresIn * 1000)));
+
+          console.log('✓ Authentication token stored');
+        }
+      }
 
       // Manually trigger session refresh
       await refreshSession();
