@@ -676,7 +676,10 @@ app.all('/api/auth/*', async (c) => {
                     };
 
                     // Calculate expiration timestamp
-                    const expiresAtTimestamp = Math.floor(new Date(data.session.expiresAt).getTime() / 1000);
+                    // Session maxAge is 7 days (from auth.ts: 60 * 60 * 24 * 7 seconds)
+                    const sessionMaxAgeMs = 60 * 60 * 24 * 7 * 1000; // 7 days in milliseconds
+                    const expiresAtDate = new Date(Date.now() + sessionMaxAgeMs);
+                    const expiresAtTimestamp = Math.floor(expiresAtDate.getTime() / 1000);
 
                     // Sign JWT with EdDSA using jose
                     const jwtToken = await new SignJWT(jwtPayload)
@@ -687,9 +690,9 @@ app.all('/api/auth/*', async (c) => {
 
                     // Add JWT token to response
                     data.token = jwtToken;
-                    data.expiresAt = data.session.expiresAt;
+                    data.expiresAt = expiresAtDate.toISOString(); // ISO string for frontend parsing
                     console.log('✓ Created EdDSA JWT token for Python backend verification');
-                    console.log(`  User: ${data.user.email}, Expires: ${data.session.expiresAt}`);
+                    console.log(`  User: ${data.user.email}, Expires: ${expiresAtDate.toISOString()}`);
 
                     return new Response(JSON.stringify(data), {
                         status: response.status,
