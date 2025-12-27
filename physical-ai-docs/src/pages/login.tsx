@@ -21,14 +21,14 @@ function LoginPage() {
     try {
       console.log('🔐 Attempting login for:', email);
 
-      // Use custom sign-in endpoint that sets cookies correctly
+      // Use Better Auth's sign-in and extract session token
       const { authBaseUrl } = await import('../lib/auth-client');
-      const response = await fetch(`${authBaseUrl}/api/auth/custom-signin`, {
+      const response = await fetch(`${authBaseUrl}/api/auth/sign-in/email`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        credentials: 'include', // Important for session cookies
+        credentials: 'include',
         body: JSON.stringify({ email, password })
       });
 
@@ -42,20 +42,17 @@ function LoginPage() {
       const result = await response.json();
       console.log('✓ Login successful for:', result.user?.email || email);
 
-      // Store user and token in localStorage (works cross-domain!)
+      // Store user
       if (result.user) {
         localStorage.setItem('auth_user', JSON.stringify(result.user));
       }
 
-      // Token is included in the sign-in response
-      if (result.token) {
-        localStorage.setItem('auth_token', result.token);
-
-        // Calculate expiry from expiresAt timestamp
-        const expiresAt = new Date(result.expiresAt).getTime();
+      // Extract token from sign-in response (Better Auth includes it)
+      if (result.session?.token) {
+        localStorage.setItem('auth_token', result.session.token);
+        const expiresAt = new Date(result.session.expiresAt).getTime();
         localStorage.setItem('auth_token_expiry', String(expiresAt));
-
-        console.log('✓ Authentication token stored (expires:', result.expiresAt, ')');
+        console.log('✓ Token stored from sign-in response');
       }
 
       // Manually trigger session refresh
