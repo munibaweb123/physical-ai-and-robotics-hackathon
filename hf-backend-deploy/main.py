@@ -91,11 +91,11 @@ def verify_jwt_token(token: str) -> Dict[str, Any]:
     """
     try:
         # Verify and decode the JWT using the shared secret
-        # Better Auth uses HS512 with shared secret
+        # We create JWT tokens with HS256 in the auth server
         payload = jwt.decode(
             token,
             settings.BETTER_AUTH_SECRET,
-            algorithms=["HS512"],
+            algorithms=["HS256", "HS512"],  # Support both HS256 and HS512
             options={"verify_aud": False}  # Better Auth doesn't use audience claim
         )
 

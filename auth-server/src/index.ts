@@ -618,17 +618,35 @@ app.all('/api/auth/*', async (c) => {
     try {
         const response = await auth.handler(c.req.raw);
 
-        // Intercept sign-in responses to add token to response body
+        // Intercept sign-in responses to add JWT token to response body
         if (c.req.path === '/api/auth/sign-in/email' && c.req.method === 'POST') {
             const clonedResponse = response.clone();
             const data = await clonedResponse.json();
 
-            // Extract session from Better Auth response (it includes session data)
-            if (data.session && data.session.token) {
-                // Token is already in the response, just ensure it's accessible
-                data.token = data.session.token;
+            // Extract session from Better Auth response
+            if (data.session && data.user) {
+                // Create a proper JWT token for Python backend
+                const jwt = require('jsonwebtoken');
+                const BETTER_AUTH_SECRET = process.env.BETTER_AUTH_SECRET || 'super-secret-key-please-change-me-in-production';
+
+                // Create JWT payload matching Better Auth structure
+                const jwtPayload = {
+                    sub: data.user.id,  // Subject (user ID)
+                    userId: data.user.id,
+                    email: data.user.email,
+                    name: data.user.name,
+                    iat: Math.floor(Date.now() / 1000),  // Issued at
+                    exp: Math.floor(new Date(data.session.expiresAt).getTime() / 1000)  // Expiration
+                };
+
+                // Sign JWT with HS256 (same secret as Better Auth)
+                const jwtToken = jwt.sign(jwtPayload, BETTER_AUTH_SECRET, { algorithm: 'HS256' });
+
+                // Add JWT token to response
+                data.token = jwtToken;
                 data.expiresAt = data.session.expiresAt;
-                console.log('✓ Exposed token from session in sign-in response');
+                console.log('✓ Created JWT token for Python backend verification');
+                console.log(`  User: ${data.user.email}, Expires: ${data.session.expiresAt}`);
 
                 return new Response(JSON.stringify(data), {
                     status: response.status,
