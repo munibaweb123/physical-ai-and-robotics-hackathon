@@ -648,6 +648,10 @@ app.all('/api/auth/*', async (c) => {
             const clonedResponse = response.clone();
             const data = await clonedResponse.json();
 
+            console.log('🔍 Sign-in response data keys:', Object.keys(data));
+            console.log('🔍 Has session?', !!data.session);
+            console.log('🔍 Has user?', !!data.user);
+
             // Extract session from Better Auth response
             if (data.session && data.user) {
                 try {
