@@ -22,6 +22,10 @@ services:
         sync: false
       - key: BETTER_AUTH_SECRET
         sync: false
+      - key: EDDSA_PUBLIC_KEY
+        sync: false
+      - key: EDDSA_PRIVATE_KEY
+        sync: false
       - key: FRONTEND_URL
         sync: false
     healthCheckPath: /api/db/health
@@ -29,15 +33,15 @@ services:
   # Python FastAPI Backend
   - type: web
     name: physical-ai-backend
-    runtime: python
+    runtime: docker
     plan: free
     region: oregon
     branch: 002-expand-course-content
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    rootDir: hf-backend-deploy
+    dockerfilePath: ./Dockerfile
     healthCheckPath: /
     envVars:
-      - key: GEMINI_API_KEY
+      - key: OPENAI_API_KEY
         sync: false
       - key: QDRANT_URL
         sync: false
@@ -52,5 +56,3 @@ services:
         sync: false
       - key: FRONTEND_URL
         sync: false
-      - key: PORT
-        value: "8000"
