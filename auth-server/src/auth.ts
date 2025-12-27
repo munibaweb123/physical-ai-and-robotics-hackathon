@@ -43,14 +43,8 @@ export const auth = betterAuth({
         bearer(),
         jwt({
             // JWT configuration for Python backend integration
-            algorithm: 'EdDSA', // Ed25519 algorithm
             issuer: AUTH_SERVER_BASE_URL, // Issuer must match the auth server URL
             audience: AUTH_SERVER_BASE_URL, // Audience must match
-            jwks: {
-                // Enable automatic key rotation
-                rotationInterval: 60 * 60 * 24 * 30, // 30 days
-                gracePeriod: 60 * 60 * 24 * 30 // 30 days
-            }
         }),
     ],
     // Trust the frontend origin (your Vercel app)
