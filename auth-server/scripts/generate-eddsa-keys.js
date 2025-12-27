@@ -5,7 +5,7 @@
  * Usage: node scripts/generate-eddsa-keys.js
  */
 
-const crypto = require('crypto');
+import crypto from 'crypto';
 
 function generateEdDSAKeyPair() {
     console.log('🔑 Generating EdDSA (Ed25519) Key Pair...\n');

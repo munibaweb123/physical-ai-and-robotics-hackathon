@@ -1,5 +1,5 @@
 import { betterAuth } from 'better-auth';
-import { bearer } from "better-auth/plugins";
+import { bearer, jwt } from "better-auth/plugins";
 import { config } from 'dotenv';
 
 // Import Drizzle adapter for Better Auth
@@ -41,8 +41,17 @@ export const auth = betterAuth({
     },
     plugins: [
         bearer(),
-        // Removed JWT plugin - we'll handle EdDSA tokens manually for Python backend
-        // Better Auth will use session-based auth for frontend
+        jwt({
+            // JWT configuration for Python backend integration
+            algorithm: 'EdDSA', // Ed25519 algorithm
+            issuer: AUTH_SERVER_BASE_URL, // Issuer must match the auth server URL
+            audience: AUTH_SERVER_BASE_URL, // Audience must match
+            jwks: {
+                // Enable automatic key rotation
+                rotationInterval: 60 * 60 * 24 * 30, // 30 days
+                gracePeriod: 60 * 60 * 24 * 30 // 30 days
+            }
+        }),
     ],
     // Trust the frontend origin (your Vercel app)
     trustedOrigins: [FRONTEND_URL],
