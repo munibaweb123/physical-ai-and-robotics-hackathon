@@ -652,8 +652,9 @@ app.all('/api/auth/*', async (c) => {
             console.log('🔍 Has session?', !!data.session);
             console.log('🔍 Has user?', !!data.user);
 
-            // Extract session from Better Auth response
-            if (data.session && data.user) {
+            // Better Auth sign-in doesn't return session object, only user
+            // So we only check for user
+            if (data.user) {
                 try {
                     // Import crypto and jose for EdDSA JWT creation
                     const crypto = await import('crypto');
