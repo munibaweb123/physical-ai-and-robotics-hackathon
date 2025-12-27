@@ -235,14 +235,14 @@ const performTranslation = async (content: string, sourceLang: string, targetLan
 
     // Make the actual API call to translate content
     // The backend expects: sourceLanguage, targetLanguage, content, chapterId
-    console.log('Making translation request to:', `${apiBaseUrl}/translate`, {
+    console.log('Making translation request to:', `${apiBaseUrl}/api/translate`, {
       content: content.substring(0, 100) + '...', // Log first 100 chars
       sourceLanguage: sourceLang,
       targetLanguage: targetLang,
       token: token ? 'present' : 'missing'
     });
 
-    const response = await fetch(`${apiBaseUrl}/translate`, {
+    const response = await fetch(`${apiBaseUrl}/api/translate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

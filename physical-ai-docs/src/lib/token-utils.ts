@@ -1,15 +1,15 @@
 /**
  * Utility functions for managing EdDSA JWT tokens
- * Token is now stored in localStorage during login
+ * Token is now stored in localStorage during login as 'python_token'
  */
 
 /**
- * Get the EdDSA token from localStorage
+ * Get the EdDSA token from localStorage (for Python backend requests)
  */
 export async function getEddsaToken(): Promise<string | null> {
   try {
-    // Get token from localStorage (stored during login)
-    const token = localStorage.getItem('auth_token');
+    // Get EdDSA token from localStorage (stored during login)
+    const token = localStorage.getItem('python_token');
     const expiryStr = localStorage.getItem('auth_token_expiry');
 
     if (!token || !expiryStr) {
@@ -21,8 +21,9 @@ export async function getEddsaToken(): Promise<string | null> {
     const expiry = parseInt(expiryStr);
     if (Date.now() >= expiry) {
       console.warn('EdDSA token expired');
-      // Clear expired token
+      // Clear expired tokens
       localStorage.removeItem('auth_token');
+      localStorage.removeItem('python_token');
       localStorage.removeItem('auth_token_expiry');
       localStorage.removeItem('auth_user');
       return null;
@@ -36,19 +37,20 @@ export async function getEddsaToken(): Promise<string | null> {
 }
 
 /**
- * Clear the token (useful after logout)
+ * Clear the tokens (useful after logout)
  */
 export function clearEddsaToken(): void {
   localStorage.removeItem('auth_token');
+  localStorage.removeItem('python_token');
   localStorage.removeItem('auth_token_expiry');
   localStorage.removeItem('auth_user');
 }
 
 /**
- * Check if we have a valid token
+ * Check if we have a valid EdDSA token
  */
 export function hasValidEddsaToken(): boolean {
-  const token = localStorage.getItem('auth_token');
+  const token = localStorage.getItem('python_token');
   const expiryStr = localStorage.getItem('auth_token_expiry');
 
   if (!token || !expiryStr) {
