@@ -20,11 +20,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsLoading(true);
         try {
             // First check localStorage for token-based auth (works cross-domain!)
-            const authToken = localStorage.getItem('auth_token');
+            const authToken = localStorage.getItem('auth_token'); // Better Auth token
+            const pythonToken = localStorage.getItem('python_token'); // EdDSA token for Python backend
             const authUser = localStorage.getItem('auth_user');
             const tokenExpiry = localStorage.getItem('auth_token_expiry');
 
-            if (authToken && authUser && tokenExpiry) {
+            if (authToken && pythonToken && authUser && tokenExpiry) {
                 const expiryTime = parseInt(tokenExpiry);
                 const now = Date.now();
 
@@ -45,10 +46,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     setIsLoading(false);
                     return;
                 } else {
-                    // Token expired, clear it
+                    // Token expired, clear all tokens
                     console.log('⚠️ Authentication token expired');
                     console.log('  - Token was valid for:', (expiryTime - now) / (1000 * 60 * 60), 'hours');
                     localStorage.removeItem('auth_token');
+                    localStorage.removeItem('python_token');
                     localStorage.removeItem('auth_user');
                     localStorage.removeItem('auth_token_expiry');
                 }

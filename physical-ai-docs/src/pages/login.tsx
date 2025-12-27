@@ -47,28 +47,24 @@ function LoginPage() {
         localStorage.setItem('auth_user', JSON.stringify(result.user));
       }
 
-      // Token is injected into sign-in response by backend
+      // Store Better Auth token (for auth-server requests)
       if (result.token) {
         localStorage.setItem('auth_token', result.token);
+        console.log('✓ Better Auth token stored');
+      }
 
-        // Debug: Log the expiresAt value
-        console.log('🔍 Debug - expiresAt from server:', result.expiresAt);
-        console.log('🔍 Debug - typeof expiresAt:', typeof result.expiresAt);
+      // Store EdDSA token (for Python backend requests)
+      if (result.pythonToken) {
+        localStorage.setItem('python_token', result.pythonToken);
+        console.log('✓ Python EdDSA token stored');
 
+        // Calculate and store expiry
         const expiresAt = new Date(result.expiresAt).getTime();
-        console.log('🔍 Debug - expiresAt timestamp:', expiresAt);
-        console.log('🔍 Debug - Date.now():', Date.now());
-        console.log('🔍 Debug - Time until expiry (ms):', expiresAt - Date.now());
-        console.log('🔍 Debug - Time until expiry (hours):', (expiresAt - Date.now()) / (1000 * 60 * 60));
-
         localStorage.setItem('auth_token_expiry', String(expiresAt));
-        console.log('✓ Token stored from sign-in response');
-
-        // Verify storage
-        console.log('✓ Stored expiry:', localStorage.getItem('auth_token_expiry'));
+        console.log('✓ Token expiry stored:', new Date(expiresAt).toISOString());
+        console.log('  Time until expiry (hours):', (expiresAt - Date.now()) / (1000 * 60 * 60));
       } else {
-        console.warn('⚠️  No token in sign-in response');
-        console.log('🔍 Debug - Full response:', result);
+        console.warn('⚠️  No pythonToken in sign-in response');
       }
 
       // Manually trigger session refresh

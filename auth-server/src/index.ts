@@ -693,11 +693,12 @@ app.all('/api/auth/*', async (c) => {
                         .setExpirationTime(expiresAtTimestamp)
                         .sign(privateKey);
 
-                    // Add JWT token to response
-                    data.token = jwtToken;
+                    // Add EdDSA JWT token to response (keep original data.token for auth-server)
+                    data.pythonToken = jwtToken;  // EdDSA token for Python backend
                     data.expiresAt = expiresAtDate.toISOString(); // ISO string for frontend parsing
                     console.log('✓ Created EdDSA JWT token for Python backend verification');
                     console.log(`  User: ${data.user.email}, Expires: ${expiresAtDate.toISOString()}`);
+                    console.log(`  Better Auth token preserved: ${data.token ? 'yes' : 'no'}`);
 
                     return new Response(JSON.stringify(data), {
                         status: response.status,
