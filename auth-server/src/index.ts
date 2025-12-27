@@ -546,6 +546,31 @@ app.post('/api/auth/custom-signin', async (c) => {
     }
 });
 
+// Custom JWKS endpoint for EdDSA token verification
+app.get('/api/auth/jwks', async (c) => {
+    console.log('📋 JWKS request received');
+
+    // Get the JWKS x parameter from environment
+    const JWKS_X = process.env.JWKS_X || 'BMhwYtFyfFTHhC-4_84uI-a4nnaHy3suK1AW0oRPIYI';
+
+    // Return JWKS with EdDSA public key
+    const jwks = {
+        keys: [
+            {
+                kty: 'OKP',  // Octet Key Pair (for EdDSA)
+                use: 'sig',  // For signature verification
+                crv: 'Ed25519',  // Ed25519 curve
+                kid: 'eddsa-key-1',  // Key ID
+                alg: 'EdDSA',  // Algorithm
+                x: JWKS_X  // base64url encoded public key
+            }
+        ]
+    };
+
+    console.log('✓ Returning JWKS with 1 EdDSA key');
+    return c.json(jwks);
+});
+
 // Custom endpoint to get session token for Bearer authentication
 app.get('/api/auth/token', async (c) => {
     // Debug: Log all headers
@@ -618,41 +643,64 @@ app.all('/api/auth/*', async (c) => {
     try {
         const response = await auth.handler(c.req.raw);
 
-        // Intercept sign-in responses to add JWT token to response body
+        // Intercept sign-in responses to add EdDSA JWT token to response body
         if (c.req.path === '/api/auth/sign-in/email' && c.req.method === 'POST') {
             const clonedResponse = response.clone();
             const data = await clonedResponse.json();
 
             // Extract session from Better Auth response
             if (data.session && data.user) {
-                // Create a proper JWT token for Python backend
-                const jwt = require('jsonwebtoken');
-                const BETTER_AUTH_SECRET = process.env.BETTER_AUTH_SECRET || 'super-secret-key-please-change-me-in-production';
+                try {
+                    // Import crypto and jose for EdDSA JWT creation
+                    const crypto = await import('crypto');
+                    const { SignJWT } = await import('jose');
 
-                // Create JWT payload matching Better Auth structure
-                const jwtPayload = {
-                    sub: data.user.id,  // Subject (user ID)
-                    userId: data.user.id,
-                    email: data.user.email,
-                    name: data.user.name,
-                    iat: Math.floor(Date.now() / 1000),  // Issued at
-                    exp: Math.floor(new Date(data.session.expiresAt).getTime() / 1000)  // Expiration
-                };
+                    // Get EdDSA private key from environment
+                    const EDDSA_PRIVATE_KEY_BASE64 = process.env.EDDSA_PRIVATE_KEY || 'LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1DNENBUUF3QlFZREsyVndCQ0lFSUFLaTd5aEFxb0hGbnBtWFFxczliM09Wdnc2Vlh2aUw0Ky9VcnMxaXRXcXUKLS0tLS1FTkQgUFJJVkFURSBLRVktLS0tLQo=';
 
-                // Sign JWT with HS256 (same secret as Better Auth)
-                const jwtToken = jwt.sign(jwtPayload, BETTER_AUTH_SECRET, { algorithm: 'HS256' });
+                    // Decode base64 to PEM
+                    const privateKeyPEM = Buffer.from(EDDSA_PRIVATE_KEY_BASE64, 'base64').toString('utf-8');
 
-                // Add JWT token to response
-                data.token = jwtToken;
-                data.expiresAt = data.session.expiresAt;
-                console.log('✓ Created JWT token for Python backend verification');
-                console.log(`  User: ${data.user.email}, Expires: ${data.session.expiresAt}`);
+                    // Import private key
+                    const privateKey = crypto.createPrivateKey({
+                        key: privateKeyPEM,
+                        format: 'pem'
+                    });
 
-                return new Response(JSON.stringify(data), {
-                    status: response.status,
-                    statusText: response.statusText,
-                    headers: response.headers
-                });
+                    // Create JWT payload matching Better Auth structure
+                    const jwtPayload = {
+                        sub: data.user.id,  // Subject (user ID)
+                        userId: data.user.id,
+                        email: data.user.email,
+                        name: data.user.name
+                    };
+
+                    // Calculate expiration timestamp
+                    const expiresAtTimestamp = Math.floor(new Date(data.session.expiresAt).getTime() / 1000);
+
+                    // Sign JWT with EdDSA using jose
+                    const jwtToken = await new SignJWT(jwtPayload)
+                        .setProtectedHeader({ alg: 'EdDSA', kid: 'eddsa-key-1' })
+                        .setIssuedAt()
+                        .setExpirationTime(expiresAtTimestamp)
+                        .sign(privateKey);
+
+                    // Add JWT token to response
+                    data.token = jwtToken;
+                    data.expiresAt = data.session.expiresAt;
+                    console.log('✓ Created EdDSA JWT token for Python backend verification');
+                    console.log(`  User: ${data.user.email}, Expires: ${data.session.expiresAt}`);
+
+                    return new Response(JSON.stringify(data), {
+                        status: response.status,
+                        statusText: response.statusText,
+                        headers: response.headers
+                    });
+                } catch (error) {
+                    console.error('❌ Failed to create EdDSA JWT:', error);
+                    // Fallback: return original response
+                    return response;
+                }
             }
         }
 
