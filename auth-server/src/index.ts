@@ -489,81 +489,20 @@ app.get('/api/auth/token/eddsa', async (c) => {
 // POST endpoint to update user background information
 app.post('/api/auth/user/background', async (c) => {
     try {
-        const headers = c.req.raw.headers;
-        console.log('User Background Headers:', JSON.stringify(Object.fromEntries(headers.entries())));
+        console.log('📝 POST /api/auth/user/background - Updating user background');
 
-        let session = await auth.api.getSession({
+        // Use Better Auth's built-in session verification
+        // This handles both cookie-based sessions and Bearer tokens via jwt() and bearer() plugins
+        const session = await auth.api.getSession({
             headers: c.req.raw.headers
         });
 
         if (!session) {
-            // Fallback: Check for Bearer token manually if getSession (cookie-based) fails
-            const authHeader = c.req.header('Authorization');
-            if (authHeader && authHeader.startsWith('Bearer ')) {
-                const token = authHeader.split(' ')[1];
-
-                // First, try to verify as EdDSA JWT token
-                try {
-                    // Convert public key from base64url to PEM format
-                    const base64 = eddsaKeys.publicKey.replace(/-/g, '+').replace(/_/g, '/');
-                    const padding = '='.repeat((4 - (base64.length % 4)) % 4);
-                    const publicKeyBuffer = Buffer.from(base64 + padding, 'base64');
-
-                    // Create public key object
-                    const publicKey = crypto.createPublicKey({
-                        key: publicKeyBuffer,
-                        format: 'der',
-                        type: 'spki'
-                    });
-
-                    // Verify the JWT
-                    const decoded = jwt.verify(token, publicKey, {
-                        algorithms: ['EdDSA']
-                    }) as any;
-
-                    console.log('✓ EdDSA JWT verified for user:', decoded.email);
-
-                    // Fetch user from database
-                    const user = await db.selectFrom('user')
-                        .selectAll()
-                        .where('id', '=', decoded.sub)
-                        .executeTakeFirst();
-
-                    if (user) {
-                        // Construct session object
-                        session = {
-                            session: { userId: user.id },
-                            user: user
-                        } as any;
-                    }
-                } catch (jwtError) {
-                    console.log('Not a valid EdDSA JWT, trying as opaque session token');
-                    // Fallback: Try as opaque token against the session table
-                    const dbSession = await db.selectFrom('session')
-                        .selectAll()
-                        .where('token', '=', token)
-                        .executeTakeFirst();
-
-                    if (dbSession && dbSession.expiresAt > new Date()) {
-                         // Fetch user for this session
-                         const user = await db.selectFrom('user')
-                            .selectAll()
-                            .where('id', '=', dbSession.userId)
-                            .executeTakeFirst();
-
-                         if (user) {
-                             // Manually construct session object
-                             session = { session: dbSession, user: user } as any;
-                         }
-                    }
-                }
-            }
-        }
-
-        if (!session) {
-            console.log('Session verification failed for background update');
+            console.log('❌ No valid session found');
             return c.json({ success: false, error: 'Authentication required' }, 401);
         }
+
+        console.log('✓ User authenticated:', session.user.email);
 
         // @ts-ignore
         const userId = session.user.id;
@@ -626,57 +565,20 @@ app.post('/api/auth/user/background', async (c) => {
 // GET endpoint to retrieve user background information
 app.get('/api/auth/user/background', async (c) => {
     try {
-        let session = await auth.api.getSession({
+        console.log('📖 GET /api/auth/user/background - Retrieving user background');
+
+        // Use Better Auth's built-in session verification
+        // This handles both cookie-based sessions and Bearer tokens via jwt() and bearer() plugins
+        const session = await auth.api.getSession({
             headers: c.req.raw.headers
         });
 
         if (!session) {
-            // Fallback: Check for Bearer token (EdDSA JWT)
-            const authHeader = c.req.header('Authorization');
-            if (authHeader && authHeader.startsWith('Bearer ')) {
-                const token = authHeader.split(' ')[1];
-
-                try {
-                    // Convert public key from base64url to buffer
-                    const base64 = eddsaKeys.publicKey.replace(/-/g, '+').replace(/_/g, '/');
-                    const padding = '='.repeat((4 - (base64.length % 4)) % 4);
-                    const publicKeyBuffer = Buffer.from(base64 + padding, 'base64');
-
-                    // Create public key object
-                    const publicKey = crypto.createPublicKey({
-                        key: publicKeyBuffer,
-                        format: 'der',
-                        type: 'spki'
-                    });
-
-                    // Verify the JWT
-                    const decoded = jwt.verify(token, publicKey, {
-                        algorithms: ['EdDSA']
-                    }) as any;
-
-                    console.log('✓ EdDSA JWT verified for user:', decoded.email);
-
-                    // Fetch user from database
-                    const user = await db.selectFrom('user')
-                        .selectAll()
-                        .where('id', '=', decoded.sub)
-                        .executeTakeFirst();
-
-                    if (user) {
-                        session = {
-                            session: { userId: user.id },
-                            user: user
-                        } as any;
-                    }
-                } catch (jwtError) {
-                    console.log('JWT verification failed:', jwtError);
-                }
-            }
-        }
-
-        if (!session) {
+            console.log('❌ No valid session found');
             return c.json({ success: false, error: 'Authentication required' }, 401);
         }
+
+        console.log('✓ User authenticated:', session.user.email);
 
         const userId = session.user.id;
 
