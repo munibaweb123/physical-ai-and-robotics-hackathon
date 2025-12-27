@@ -26,7 +26,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             if (authToken && authUser && tokenExpiry) {
                 const expiryTime = parseInt(tokenExpiry);
-                if (Date.now() < expiryTime) {
+                const now = Date.now();
+
+                // Debug logging
+                console.log('🔍 Token expiry check:');
+                console.log('  - Stored expiry:', tokenExpiry);
+                console.log('  - Parsed expiry:', expiryTime);
+                console.log('  - Current time:', now);
+                console.log('  - Time diff (ms):', expiryTime - now);
+                console.log('  - Is valid?', now < expiryTime);
+
+                if (now < expiryTime) {
                     // Token is still valid
                     console.log('✓ Using stored authentication token');
                     const user = JSON.parse(authUser);
@@ -37,6 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 } else {
                     // Token expired, clear it
                     console.log('⚠️ Authentication token expired');
+                    console.log('  - Token was valid for:', (expiryTime - now) / (1000 * 60 * 60), 'hours');
                     localStorage.removeItem('auth_token');
                     localStorage.removeItem('auth_user');
                     localStorage.removeItem('auth_token_expiry');

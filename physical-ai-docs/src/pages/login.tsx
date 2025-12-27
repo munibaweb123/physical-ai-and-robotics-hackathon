@@ -50,11 +50,25 @@ function LoginPage() {
       // Token is injected into sign-in response by backend
       if (result.token) {
         localStorage.setItem('auth_token', result.token);
+
+        // Debug: Log the expiresAt value
+        console.log('🔍 Debug - expiresAt from server:', result.expiresAt);
+        console.log('🔍 Debug - typeof expiresAt:', typeof result.expiresAt);
+
         const expiresAt = new Date(result.expiresAt).getTime();
+        console.log('🔍 Debug - expiresAt timestamp:', expiresAt);
+        console.log('🔍 Debug - Date.now():', Date.now());
+        console.log('🔍 Debug - Time until expiry (ms):', expiresAt - Date.now());
+        console.log('🔍 Debug - Time until expiry (hours):', (expiresAt - Date.now()) / (1000 * 60 * 60));
+
         localStorage.setItem('auth_token_expiry', String(expiresAt));
         console.log('✓ Token stored from sign-in response');
+
+        // Verify storage
+        console.log('✓ Stored expiry:', localStorage.getItem('auth_token_expiry'));
       } else {
         console.warn('⚠️  No token in sign-in response');
+        console.log('🔍 Debug - Full response:', result);
       }
 
       // Manually trigger session refresh
