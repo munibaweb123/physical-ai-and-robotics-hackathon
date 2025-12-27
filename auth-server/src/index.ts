@@ -623,16 +623,12 @@ app.all('/api/auth/*', async (c) => {
             const clonedResponse = response.clone();
             const data = await clonedResponse.json();
 
-            // Get session using the response cookies
-            const session = await auth.api.getSession({
-                headers: response.headers
-            });
-
-            if (session && session.session) {
-                // Add token to response
-                data.token = session.session.token;
-                data.expiresAt = session.session.expiresAt;
-                console.log('✓ Injected token into sign-in response');
+            // Extract session from Better Auth response (it includes session data)
+            if (data.session && data.session.token) {
+                // Token is already in the response, just ensure it's accessible
+                data.token = data.session.token;
+                data.expiresAt = data.session.expiresAt;
+                console.log('✓ Exposed token from session in sign-in response');
 
                 return new Response(JSON.stringify(data), {
                     status: response.status,
