@@ -502,6 +502,32 @@ app.get('/api/auth/chapters/:chapterId/personalize', async (c) => {
     }
 });
 
+// Custom endpoint to get session token for Bearer authentication
+app.get('/api/auth/token', async (c) => {
+    const session = await auth.api.getSession({
+        headers: c.req.raw.headers
+    });
+
+    if (!session) {
+        console.log('❌ No session found for token request');
+        return c.json({ error: 'Authentication required' }, 401);
+    }
+
+    console.log('✓ Returning session token for user:', session.user.email);
+
+    // Return session token for Bearer auth (works cross-domain)
+    return c.json({
+        token: session.session.token,
+        expiresAt: session.session.expiresAt,
+        tokenType: 'Bearer',
+        user: {
+            id: session.user.id,
+            email: session.user.email,
+            name: session.user.name
+        }
+    });
+});
+
 // Custom user endpoints (e.g., get current user)
 app.get('/api/auth/user', async (c) => {
     const session = await auth.api.getSession({

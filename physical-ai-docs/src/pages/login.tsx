@@ -47,23 +47,23 @@ function LoginPage() {
         localStorage.setItem('auth_user', JSON.stringify(result.user));
       }
 
-      // Get session to extract JWT token for Bearer auth
-      const sessionResponse = await fetch(`${authBaseUrl}/api/auth/get-session`, {
+      // Get token for Bearer authentication (cross-domain API calls)
+      const tokenResponse = await fetch(`${authBaseUrl}/api/auth/token`, {
         method: 'GET',
-        credentials: 'include'
+        credentials: 'include' // Include session cookie
       });
 
-      if (sessionResponse.ok) {
-        const sessionData = await sessionResponse.json();
-        if (sessionData.session?.token) {
-          // Store token for Bearer authentication (cross-domain API calls)
-          localStorage.setItem('auth_token', sessionData.session.token);
+      if (tokenResponse.ok) {
+        const tokenData = await tokenResponse.json();
+        if (tokenData.token) {
+          // Store token for Bearer authentication
+          localStorage.setItem('auth_token', tokenData.token);
 
-          // Calculate expiry (7 days from now as per auth server config)
-          const expiresIn = 7 * 24 * 60 * 60; // 7 days in seconds
-          localStorage.setItem('auth_token_expiry', String(Date.now() + (expiresIn * 1000)));
+          // Calculate expiry from expiresAt timestamp
+          const expiresAt = new Date(tokenData.expiresAt).getTime();
+          localStorage.setItem('auth_token_expiry', String(expiresAt));
 
-          console.log('✓ Authentication token stored');
+          console.log('✓ Authentication token stored (expires:', tokenData.expiresAt, ')');
         }
       }
 
