@@ -504,13 +504,27 @@ app.get('/api/auth/chapters/:chapterId/personalize', async (c) => {
 
 // Custom endpoint to get session token for Bearer authentication
 app.get('/api/auth/token', async (c) => {
+    // Debug: Log all headers
+    console.log('📋 Token request headers:', {
+        cookie: c.req.header('cookie'),
+        authorization: c.req.header('authorization'),
+        origin: c.req.header('origin')
+    });
+
     const session = await auth.api.getSession({
         headers: c.req.raw.headers
     });
 
     if (!session) {
         console.log('❌ No session found for token request');
-        return c.json({ error: 'Authentication required' }, 401);
+        console.log('Headers received:', Object.fromEntries(c.req.raw.headers.entries()));
+        return c.json({
+            error: 'Authentication required',
+            debug: {
+                hasCookie: !!c.req.header('cookie'),
+                origin: c.req.header('origin')
+            }
+        }, 401);
     }
 
     console.log('✓ Returning session token for user:', session.user.email);
