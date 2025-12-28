@@ -30,7 +30,7 @@ export default function Chatbot() {
   // Get EdDSA token from localStorage
   useEffect(() => {
     const getTokenFromStorage = () => {
-      const token = localStorage.getItem('auth_token');
+      const token = localStorage.getItem('python_token');
       const expiryStr = localStorage.getItem('auth_token_expiry');
 
       if (token && expiryStr) {
@@ -40,7 +40,7 @@ export default function Chatbot() {
           console.log('✓ EdDSA token loaded from localStorage for chatbot');
         } else {
           console.warn('EdDSA token expired');
-          localStorage.removeItem('auth_token');
+          localStorage.removeItem('python_token');
           localStorage.removeItem('auth_token_expiry');
           localStorage.removeItem('auth_user');
         }
@@ -87,7 +87,7 @@ export default function Chatbot() {
     } else {
         // If we don't have an EdDSA token yet, try to get it from localStorage
         console.warn('No EdDSA token available, checking localStorage...');
-        const token = localStorage.getItem('auth_token');
+        const token = localStorage.getItem('python_token');
         const expiryStr = localStorage.getItem('auth_token_expiry');
 
         if (token && expiryStr && Date.now() < parseInt(expiryStr)) {
