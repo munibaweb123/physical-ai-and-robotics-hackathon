@@ -259,21 +259,17 @@ app.post('/api/auth/user/background', async (c) => {
     try {
         console.log('📝 POST /api/auth/user/background - Updating user background');
 
-        // Use Better Auth's built-in session verification
-        // This handles both cookie-based sessions and Bearer tokens via jwt() and bearer() plugins
-        const session = await auth.api.getSession({
-            headers: c.req.raw.headers
-        });
+        // Use hybrid authentication verification
+        const auth_result = await verifyAuthentication(c);
 
-        if (!session) {
-            console.log('❌ No valid session found');
+        if (!auth_result) {
+            console.log('❌ No valid session or token found');
             return c.json({ success: false, error: 'Authentication required' }, 401);
         }
 
-        console.log('✓ User authenticated:', session.user.email);
+        console.log('✓ User authenticated:', auth_result.email);
 
-        // @ts-ignore
-        const userId = session.user.id;
+        const userId = auth_result.userId;
         const body = await c.req.json();
 
         // Validate the input
@@ -330,25 +326,83 @@ app.post('/api/auth/user/background', async (c) => {
     }
 });
 
+// Helper function to verify both Better Auth sessions and custom EdDSA JWT tokens
+async function verifyAuthentication(c: any): Promise<{ userId: string; email: string } | null> {
+    try {
+        // 1. Try Better Auth's native session verification first (cookies or Bearer)
+        const session = await auth.api.getSession({
+            headers: c.req.raw.headers
+        });
+
+        if (session) {
+            console.log('✓ Authenticated via Better Auth session:', session.user.email);
+            return { userId: session.user.id, email: session.user.email };
+        }
+
+        // 2. Fallback: Try to verify custom EdDSA JWT token
+        const authHeader = c.req.header('authorization');
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+
+            try {
+                // Import jose for JWT verification
+                const { jwtVerify } = await import('jose');
+                const crypto = await import('crypto');
+
+                // Get EdDSA private key from environment (we need this to derive public key)
+                const EDDSA_PRIVATE_KEY_BASE64 = process.env.EDDSA_PRIVATE_KEY || 'LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1DNENBUUF3QlFZREsyVndCQ0lFSUFLaTd5aEFxb0hGbnBtWFFxczliM09Wdnc2Vlh2aUw0Ky9VcnMxaXRXcXUKLS0tLS1FTkQgUFJJVkFURSBLRVktLS0tLQo=';
+                const privateKeyPEM = Buffer.from(EDDSA_PRIVATE_KEY_BASE64, 'base64').toString('utf-8');
+
+                // Import private key to extract public key
+                const privateKey = crypto.createPrivateKey({
+                    key: privateKeyPEM,
+                    format: 'pem'
+                });
+
+                // Export public key in JWK format for verification
+                const publicKey = crypto.createPublicKey(privateKey);
+
+                // Verify JWT signature
+                const { payload } = await jwtVerify(token, publicKey, {
+                    algorithms: ['EdDSA']
+                });
+
+                // Extract user ID from payload (check multiple possible fields)
+                const userId = payload.sub || payload.userId;
+                const email = payload.email;
+
+                if (userId && email) {
+                    console.log('✓ Authenticated via custom EdDSA JWT:', email);
+                    return { userId: userId as string, email: email as string };
+                }
+            } catch (jwtError) {
+                console.log('❌ Custom EdDSA JWT verification failed:', jwtError instanceof Error ? jwtError.message : String(jwtError));
+            }
+        }
+
+        return null;
+    } catch (error) {
+        console.error('❌ Authentication verification error:', error);
+        return null;
+    }
+}
+
 // GET endpoint to retrieve user background information
 app.get('/api/auth/user/background', async (c) => {
     try {
         console.log('📖 GET /api/auth/user/background - Retrieving user background');
 
-        // Use Better Auth's built-in session verification
-        // This handles both cookie-based sessions and Bearer tokens via jwt() and bearer() plugins
-        const session = await auth.api.getSession({
-            headers: c.req.raw.headers
-        });
+        // Use hybrid authentication verification
+        const auth_result = await verifyAuthentication(c);
 
-        if (!session) {
-            console.log('❌ No valid session found');
+        if (!auth_result) {
+            console.log('❌ No valid session or token found');
             return c.json({ success: false, error: 'Authentication required' }, 401);
         }
 
-        console.log('✓ User authenticated:', session.user.email);
+        console.log('✓ User authenticated:', auth_result.email);
 
-        const userId = session.user.id;
+        const userId = auth_result.userId;
 
         // Get user from the database using snake_case columns
         const user = await db.selectFrom('user')
@@ -392,16 +446,14 @@ app.get('/api/auth/user/background', async (c) => {
 // POST endpoint to update chapter personalization state
 app.post('/api/auth/chapters/:chapterId/personalize', async (c) => {
     try {
-        const session = await auth.api.getSession({
-            headers: c.req.raw.headers
-        });
+        const auth_result = await verifyAuthentication(c);
 
-        if (!session) {
+        if (!auth_result) {
             return c.json({ success: false, error: 'Authentication required' }, 401);
         }
 
         const chapterId = c.req.param('chapterId');
-        const userId = session.user.id;
+        const userId = auth_result.userId;
         const body = await c.req.json();
 
         // Validate the input
@@ -453,16 +505,14 @@ app.post('/api/auth/chapters/:chapterId/personalize', async (c) => {
 // GET endpoint to retrieve chapter personalization state
 app.get('/api/auth/chapters/:chapterId/personalize', async (c) => {
     try {
-        const session = await auth.api.getSession({
-            headers: c.req.raw.headers
-        });
+        const auth_result = await verifyAuthentication(c);
 
-        if (!session) {
+        if (!auth_result) {
             return c.json({ success: false, error: 'Authentication required' }, 401);
         }
 
         const chapterId = c.req.param('chapterId');
-        const userId = session.user.id;
+        const userId = auth_result.userId;
 
         // Get user from the database using snake_case columns
         const user = await db.selectFrom('user')
@@ -693,12 +743,13 @@ app.all('/api/auth/*', async (c) => {
                         .setExpirationTime(expiresAtTimestamp)
                         .sign(privateKey);
 
-                    // Add EdDSA JWT token to response (keep original data.token for auth-server)
+                    // Add EdDSA JWT token to response for both auth-server and Python backend
+                    data.token = jwtToken;  // EdDSA token for auth-server (used by frontend)
                     data.pythonToken = jwtToken;  // EdDSA token for Python backend
                     data.expiresAt = expiresAtDate.toISOString(); // ISO string for frontend parsing
-                    console.log('✓ Created EdDSA JWT token for Python backend verification');
+                    console.log('✓ Created EdDSA JWT token for hybrid authentication');
                     console.log(`  User: ${data.user.email}, Expires: ${expiresAtDate.toISOString()}`);
-                    console.log(`  Better Auth token preserved: ${data.token ? 'yes' : 'no'}`);
+                    console.log(`  Token added to response for both auth-server and Python backend`);
 
                     return new Response(JSON.stringify(data), {
                         status: response.status,
